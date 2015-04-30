@@ -59,7 +59,7 @@ CURDEPS:=$(addsuffix .d, $(CURFILES))
 VERBOSE=
 NO_RECOMPILE_ML4=
 NO_RECALC_DEPS=
-READABLE_ML4=true	# non-empty means .ml of .ml4 will be ascii instead of binary
+READABLE_ML4=	# non-empty means .ml of .ml4 will be ascii instead of binary
 VALIDATE=
 COQ_XML=	# is "-xml" when building XML library
 VM=		# is "-no-vm" to not use the vm"
@@ -101,12 +101,12 @@ BYTEFLAGS=-thread $(CAMLDEBUG) $(USERFLAGS)
 OPTFLAGS=-thread $(CAMLDEBUGOPT) $(CAMLTIMEPROF) $(USERFLAGS)
 DEPFLAGS= $(LOCALINCLUDES) -I ide -I ide/utils
 
-ifeq ($(ARCH),Darwin)
+ifeq ($(shell which codesign > /dev/null && echo $(ARCH)),Darwin)
 LINKMETADATA=-ccopt "-sectcreate __TEXT __info_plist config/Info-$(notdir $@).plist"
-CODESIGN=codesign -s -
+CODESIGN:=codesign -s -
 else
 LINKMETADATA=
-CODESIGN=true
+CODESIGN:=true
 endif
 
 define bestocaml
@@ -307,17 +307,22 @@ plugins/micromega/csdpcert$(EXE): $(CSDPCERTCMO:.cmo=$(BESTOBJ))
 # target to build CoqIde
 coqide: coqide-files coqide-binaries theories/Init/Prelude.vo
 
-COQIDEFLAGS=$(addprefix -I , $(IDESRCDIRS)) $(COQIDEINCLUDES) -thread
+COQIDEFLAGS=$(addprefix -I , $(IDESRCDIRS)) $(COQIDEINCLUDES)
 
 .SUFFIXES:.vo
 
-IDEFILES=$(wildcard ide/coq*.lang) ide/coq_style.xml ide/coq.png ide/MacOS/default_accel_map
+IDEFILES=$(wildcard ide/*.lang) ide/coq_style.xml ide/coq.png ide/MacOS/default_accel_map
 
-coqide-binaries: coqide-$(HASCOQIDE)
+coqide-binaries: coqide-$(HASCOQIDE) ide-toploop
 coqide-no:
-coqide-byte: $(COQIDEBYTE) $(COQIDE) $(IDETOPLOOPCMA)
-coqide-opt:  $(COQIDEBYTE) $(COQIDE) $(IDETOPLOOPCMA) $(IDETOPLOOPCMA:.cma=.cmxs)
+coqide-byte: $(COQIDEBYTE) $(COQIDE)
+coqide-opt:  $(COQIDEBYTE) $(COQIDE)
 coqide-files: $(IDEFILES)
+ifeq ($(BEST),opt)
+ide-toploop: $(IDETOPLOOPCMA) $(IDETOPLOOPCMA:.cma=.cmxs)
+else
+ide-toploop: $(IDETOPLOOPCMA)
+endif
 
 ifeq ($(HASCOQIDE),opt)
 $(COQIDE): $(LINKIDEOPT)
@@ -340,7 +345,7 @@ $(COQIDEBYTE): $(LINKIDE)
 .PHONY: install-coqide install-ide-bin install-ide-toploop install-ide-files install-ide-info install-ide-devfiles
 
 ifeq ($(HASCOQIDE),no)
-install-coqide:
+install-coqide: install-ide-toploop
 else
 install-coqide: install-ide-bin install-ide-toploop install-ide-files install-ide-info install-ide-devfiles
 endif
@@ -366,7 +371,7 @@ endif
 
 install-ide-files: #Please update $(COQIDEAPP)/Contents/Resources/ at the same time
 	$(MKDIR) $(FULLDATADIR)
-	$(INSTALLLIB) ide/coq.png ide/coq.lang ide/coq_style.xml $(FULLDATADIR)
+	$(INSTALLLIB) ide/coq.png ide/*.lang ide/coq_style.xml $(FULLDATADIR)
 	$(MKDIR) $(FULLCONFIGDIR)
 	if [ $(IDEINT) = QUARTZ ] ; then $(INSTALLLIB) ide/mac_default_accel_map $(FULLCONFIGDIR)/coqide.keys ; fi
 
@@ -383,19 +388,19 @@ install-ide-info:
 $(COQIDEAPP)/Contents:
 	rm -rdf $@
 	$(MKDIR) $@
-	sed -e "s/VERSION/$(VERSION)/g" ide/MacOS/Info.plist.template > $@/Info.plist
+	sed -e "s/VERSION/$(VERSION4MACOS)/g" ide/MacOS/Info.plist.template > $@/Info.plist
 	$(MKDIR) "$@/MacOS"
 
 $(COQIDEINAPP): ide/macos_prehook.cmx $(LINKIDEOPT) | $(COQIDEAPP)/Contents
 	$(SHOW)'OCAMLOPT -o $@'
 	$(HIDE)$(OCAMLOPT) $(COQIDEFLAGS) $(OPTFLAGS) -o $@ \
 		unix.cmxa lablgtk.cmxa lablgtksourceview2.cmxa str.cmxa \
-		$(IDEFLAGS:.cma=.cmxa) $^
+		threads.cmxa $(IDEFLAGS:.cma=.cmxa) $^
 	$(STRIP) $@
 
 $(COQIDEAPP)/Contents/Resources/share: $(COQIDEAPP)/Contents
 	$(MKDIR) $@/coq/
-	$(INSTALLLIB) ide/coq.png ide/coq.lang ide/coq_style.xml $@/coq/
+	$(INSTALLLIB) ide/coq.png ide/*.lang ide/coq_style.xml $@/coq/
 	$(MKDIR) $@/gtksourceview-2.0/{language-specs,styles}
 	$(INSTALLLIB) "$(GTKSHARE)/"gtksourceview-2.0/language-specs/{def.lang,language2.rng} $@/gtksourceview-2.0/language-specs/
 	$(INSTALLLIB) "$(GTKSHARE)/"gtksourceview-2.0/styles/{styles.rng,classic.xml} $@/gtksourceview-2.0/styles/
@@ -496,12 +501,13 @@ test-suite: world $(ALLSTDLIB).v
 ##################################################################
 
 .PHONY: lib kernel byterun library proofs tactics interp parsing pretyping
-.PHONY: highparsing stm toplevel hightactics
+.PHONY: engine highparsing stm toplevel hightactics
 
 lib: lib/clib.cma lib/lib.cma
 kernel: kernel/kernel.cma
 byterun: $(BYTERUN)
 library: library/library.cma
+engine: engine/engine.cma
 proofs: proofs/proofs.cma
 tactics: tactics/tactics.cma
 interp: interp/interp.cma
@@ -592,7 +598,7 @@ theories/Numbers/Natural/BigN/NMake_gen.v: theories/Numbers/Natural/BigN/NMake_g
 
 printers: $(DEBUGPRINTERS)
 
-tools: $(TOOLS) $(DEBUGPRINTERS) $(COQDEPBOOT)
+tools: $(TOOLS) $(DEBUGPRINTERS) $(OCAMLLIBDEP)
 
 # coqdep_boot : a basic version of coqdep, with almost no dependencies.
 
@@ -600,12 +606,9 @@ tools: $(TOOLS) $(DEBUGPRINTERS) $(COQDEPBOOT)
 # to avoid using implicit rules and hence .ml.d files that would need
 # coqdep_boot.
 
-COQDEPBOOTSRC:= \
-  tools/coqdep_lexer.mli tools/coqdep_lexer.ml \
-  tools/coqdep_common.mli tools/coqdep_common.ml \
-  tools/coqdep_boot.ml
+OCAMLLIBDEPSRC:= tools/ocamllibdep.ml
 
-$(COQDEPBOOT): $(COQDEPBOOTSRC)
+$(OCAMLLIBDEP): $(OCAMLLIBDEPSRC)
 	$(SHOW)'OCAMLBEST -o $@'
 	$(HIDE)$(call bestocaml, -I tools, unix)
 
@@ -1053,33 +1056,33 @@ endif
 
 OCAMLDEP_NG = $(OCAMLDEP) -slash -ml-synonym .ml4
 
-checker/%.ml.d: $(D_DEPEND_BEFORE_SRC) checker/%.ml $(D_DEPEND_AFTER_SRC) $(COQDEPBOOT) $(GENFILES)
+checker/%.ml.d: $(D_DEPEND_BEFORE_SRC) checker/%.ml $(D_DEPEND_AFTER_SRC) $(GENFILES)
 	$(SHOW)'OCAMLDEP  $<'
 	$(HIDE)$(OCAMLDEP_NG) $(LOCALCHKLIBS) "$<" $(TOTARGET)
 
-checker/%.mli.d: $(D_DEPEND_BEFORE_SRC) checker/%.mli $(D_DEPEND_AFTER_SRC) $(COQDEPBOOT) $(GENFILES)
+checker/%.mli.d: $(D_DEPEND_BEFORE_SRC) checker/%.mli $(D_DEPEND_AFTER_SRC) $(GENFILES)
 	$(SHOW)'OCAMLDEP  $<'
 	$(HIDE)$(OCAMLDEP_NG) $(LOCALCHKLIBS) "$<" $(TOTARGET)
 
-%.ml.d: $(D_DEPEND_BEFORE_SRC) %.ml $(D_DEPEND_AFTER_SRC) $(COQDEPBOOT) $(GENFILES)
+%.ml.d: $(D_DEPEND_BEFORE_SRC) %.ml $(D_DEPEND_AFTER_SRC) $(GENFILES)
 	$(SHOW)'OCAMLDEP  $<'
 	$(HIDE)$(OCAMLDEP_NG) $(DEPFLAGS) "$<" $(TOTARGET)
 
-%.mli.d: $(D_DEPEND_BEFORE_SRC) %.mli $(D_DEPEND_AFTER_SRC) $(COQDEPBOOT) $(GENFILES)
+%.mli.d: $(D_DEPEND_BEFORE_SRC) %.mli $(D_DEPEND_AFTER_SRC) $(GENFILES)
 	$(SHOW)'OCAMLDEP  $<'
 	$(HIDE)$(OCAMLDEP_NG) $(DEPFLAGS) "$<" $(TOTARGET)
 
-checker/%.mllib.d: $(D_DEPEND_BEFORE_SRC) checker/%.mllib $(D_DEPEND_AFTER_SRC) $(COQDEPBOOT) $(GENFILES)
-	$(SHOW)'COQDEP  $<'
-	$(HIDE)$(COQDEPBOOT) -I checker -c "$<" $(TOTARGET)
+checker/%.mllib.d: $(D_DEPEND_BEFORE_SRC) checker/%.mllib $(D_DEPEND_AFTER_SRC) $(OCAMLLIBDEP) $(GENFILES)
+	$(SHOW)'OCAMLLIBDEP  $<'
+	$(HIDE)$(OCAMLLIBDEP) $(LOCALCHKLIBS) "$<" $(TOTARGET)
 
-%.mllib.d: $(D_DEPEND_BEFORE_SRC) %.mllib $(D_DEPEND_AFTER_SRC) $(COQDEPBOOT) $(GENFILES)
-	$(SHOW)'COQDEP  $<'
-	$(HIDE)$(COQDEPBOOT) -I kernel -I tools/coqdoc -c "$<" $(TOTARGET)
+%.mllib.d: $(D_DEPEND_BEFORE_SRC) %.mllib $(D_DEPEND_AFTER_SRC) $(OCAMLLIBDEP) $(GENFILES)
+	$(SHOW)'OCAMLLIBDEP  $<'
+	$(HIDE)$(OCAMLLIBDEP) $(DEPFLAGS) "$<" $(TOTARGET)
 
-%.v.d: $(D_DEPEND_BEFORE_SRC) %.v $(D_DEPEND_AFTER_SRC) $(COQDEPBOOT) $(GENVFILES)
+%.v.d: $(D_DEPEND_BEFORE_SRC) %.v $(D_DEPEND_AFTER_SRC) $(COQDEP) $(GENVFILES)
 	$(SHOW)'COQDEP    $<'
-	$(HIDE)$(COQDEPBOOT) $(DEPNATDYN) "$<" $(TOTARGET)
+	$(HIDE)$(COQDEP) -boot $(DEPNATDYN) "$<" $(TOTARGET)
 
 %_stubs.c.d: $(D_DEPEND_BEFORE_SRC) %_stubs.c $(D_DEPEND_AFTER_SRC)
 	$(SHOW)'CCDEP	$<'

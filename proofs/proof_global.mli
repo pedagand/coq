@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -66,7 +66,7 @@ type proof_object = {
 }
 
 type proof_ending =
-  | Admitted
+  | Admitted of Names.Id.t * Decl_kinds.goal_kind * Entries.parameter_entry
   | Proved of Vernacexpr.opacity_flag *
              (Vernacexpr.lident * Decl_kinds.theorem_kind option) option *
               proof_object
@@ -99,7 +99,9 @@ val close_proof : keep_body_ucst_sepatate:bool -> Future.fix_exn -> closed_proof
 
 type closed_proof_output = (Term.constr * Declareops.side_effects) list * Evd.evar_universe_context
 
-val return_proof : unit -> closed_proof_output
+(* If allow_partial is set (default no) then an incomplete proof
+ * is allowed (no error), and a warn is given if the proof is complete. *)
+val return_proof : ?allow_partial:bool -> unit -> closed_proof_output
 val close_future_proof : feedback_id:Stateid.t ->
   closed_proof_output Future.computation -> closed_proof
 
@@ -151,11 +153,13 @@ module Bullet : sig
   type t = Vernacexpr.bullet
 
   (** A [behavior] is the data of a put function which
-      is called when a bullet prefixes a tactic, together
-      with a name to identify it. *)
+      is called when a bullet prefixes a tactic, a suggest function
+      suggesting the right bullet to use on a given proof, together
+      with a name to identify the behavior. *)
   type behavior = {
     name : string;
-    put : Proof.proof -> t -> Proof.proof
+    put : Proof.proof -> t -> Proof.proof;
+    suggest: Proof.proof -> string option
   }
 
   (** A registered behavior can then be accessed in Coq
@@ -172,6 +176,7 @@ module Bullet : sig
   (** Handles focusing/defocusing with bullets:
        *)
   val put : Proof.proof -> t -> Proof.proof
+  val suggest : Proof.proof -> string option
 end
 
 

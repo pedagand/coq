@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -118,12 +118,27 @@ let _ = Hook.set type_scheme_nb_args_hook type_scheme_nb_args
 
 (*s [type_sign_vl] does the same, plus a type var list. *)
 
+(* When generating type variables, we avoid any ' in their names
+   (otherwise this may cause a lexer conflict in ocaml with 'a').
+   We also get rid of unicode characters. Anyway, since type variables
+   are local, the created name is just a matter of taste...
+   See also Bug #3227 *)
+
+let make_typvar n vl =
+  let id = id_of_name n in
+  let id' =
+    let s = Id.to_string id in
+    if not (String.contains s '\'') && Unicode.is_basic_ascii s then id
+    else id_of_name Anonymous
+  in
+  next_ident_away id' vl
+
 let rec type_sign_vl env c =
   match kind_of_term (whd_betadeltaiota env none c) with
     | Prod (n,t,d) ->
 	let s,vl = type_sign_vl (push_rel_assum (n,t) env) d in
 	if not (is_info_scheme env t) then Kill Kother::s, vl
-	else Keep::s, (next_ident_away (id_of_name n) vl) :: vl
+	else Keep::s, (make_typvar n vl) :: vl
     | _ -> [],[]
 
 let rec nb_default_params env c =
@@ -484,7 +499,8 @@ and extract_ind env kn = (* kn is supposed to be in long form *)
 	  let n = nb_default_params env
             (Inductive.type_of_inductive env ((mib,mip0),u))
 	  in
-	  let check_proj kn = if Cset.mem kn !projs then add_projection n kn in
+	  let check_proj kn = if Cset.mem kn !projs then add_projection n kn ip
+          in
 	  List.iter (Option.iter check_proj) (lookup_projections ip)
 	with Not_found -> ()
 	end;
@@ -1054,6 +1070,15 @@ let extract_with_type env c =
 	Some (vl, t)
     | _ -> None
 
+let extract_constr env c =
+  reset_meta_count ();
+  let typ = type_of env c in
+  match flag_of_type env typ with
+    | (_,TypeScheme) -> MLdummy, Tdummy Ktype
+    | (Logic,_) -> MLdummy, Tdummy Kother
+    | (Info,Default) ->
+      let mlt = extract_type env [] 1 typ [] in
+      extract_term env Mlenv.empty mlt c [], mlt
 
 let extract_inductive env kn =
   let ind = extract_ind env kn in

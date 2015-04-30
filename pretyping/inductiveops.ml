@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -18,7 +18,6 @@ open Declarations
 open Declareops
 open Environ
 open Reductionops
-open Inductive
 
 (* The following three functions are similar to the ones defined in
    Inductive, but they expect an env *)
@@ -274,7 +273,7 @@ let projection_nparams p = projection_nparams_env (Global.env ()) p
 let make_case_info env ind style =
   let (mib,mip) = Inductive.lookup_mind_specif env ind in
   let ind_tags =
-    rel_context_tags (List.firstn mip.mind_nrealargs mip.mind_arity_ctxt) in
+    rel_context_tags (List.firstn mip.mind_nrealdecls mip.mind_arity_ctxt) in
   let cstr_tags =
     Array.map2 (fun c n ->
       let d,_ = decompose_prod_assum c in
@@ -366,14 +365,16 @@ let get_arity env ((ind,u),params) =
   let (mib,mip) = Inductive.lookup_mind_specif env ind in
   let parsign =
     (* Dynamically detect if called with an instance of recursively
-       uniform parameter only or also of non recursively uniform
+       uniform parameter only or also of recursively non-uniform
        parameters *)
-    let parsign = mib.mind_params_ctxt in
-    let nnonrecparams = mib.mind_nparams - mib.mind_nparams_rec in
-    if Int.equal (List.length params) (rel_context_nhyps parsign - nnonrecparams) then
-      snd (List.chop nnonrecparams mib.mind_params_ctxt)
-    else
-      parsign in
+    let nparams = List.length params in
+    if Int.equal nparams mib.mind_nparams then
+      mib.mind_params_ctxt
+    else begin
+      assert (Int.equal nparams mib.mind_nparams_rec);
+      let nnonrecparamdecls = List.length mib.mind_params_ctxt - mib.mind_nparams_rec in
+      snd (List.chop nnonrecparamdecls mib.mind_params_ctxt)
+    end in
   let parsign = Vars.subst_instance_context u parsign in
   let arproperlength = List.length mip.mind_arity_ctxt - List.length parsign in
   let arsign,_ = List.chop arproperlength mip.mind_arity_ctxt in
@@ -527,7 +528,7 @@ let type_case_branches_with_names env indspec p c =
   let (params,realargs) = List.chop nparams args in
   let lbrty = Inductive.build_branches_type ind specif params p in
   (* Build case type *)
-  let conclty = Reduction.beta_appvect p (Array.of_list (realargs@[c])) in
+  let conclty = Reduction.betazeta_appvect (mip.mind_nrealdecls+1) p (Array.of_list (realargs@[c])) in
   (* Adjust names *)
   if is_elim_predicate_explicitly_dependent env p (ind,params) then
     (set_pattern_names env (fst ind) lbrty, conclty)

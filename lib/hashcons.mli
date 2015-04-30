@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -56,6 +56,8 @@ module type S =
     (** This create a hashtable of the hashconsed objects. *)
     val hcons : table -> t -> t
     (** Perform the hashconsing of the given object within the table. *)
+    val stats : table -> Hashset.statistics
+    (** Recover statistics of the hashconsing table. *)
   end
 
 module Make (X : HashconsedType) : (S with type t = X.t and type u = X.u)

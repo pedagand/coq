@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -135,7 +135,14 @@ let plural n s = if n<>1 then s^"s" else s
 let conjugate_verb_to_be n = if n<>1 then "are" else "is"
 
 let ordinal n =
-  let s = match n mod 10 with 1 -> "st" | 2 -> "nd" | 3 -> "rd" | _ -> "th" in
+  let s =
+    if (n / 10) mod 10 = 1 then "th"
+    else match n mod 10 with
+    | 1 -> "st"
+    | 2 -> "nd"
+    | 3 -> "rd"
+    | _ -> "th"
+  in
   string_of_int n ^ s
 
 (* string parsing *)

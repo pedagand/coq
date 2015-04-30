@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -60,13 +60,20 @@ module ReductionBehaviour = struct
 
   let discharge = function
     | _,(ReqGlobal (ConstRef c, req), (_, b)) ->
-       let c' = pop_con c in
-       let vars, _subst, _ctx = Lib.section_segment_of_constant c in
-       let extra = List.length vars in
-       let nargs' = if b.b_nargs < 0 then b.b_nargs else b.b_nargs + extra in
-       let recargs' = List.map ((+) extra) b.b_recargs in
-       let b' = { b with b_nargs = nargs'; b_recargs = recargs' } in
-       Some (ReqGlobal (ConstRef c', req), (ConstRef c', b'))
+      let b =
+        if Lib.is_in_section (ConstRef c) then
+          let vars, _, _ = Lib.section_segment_of_constant c in
+          let extra = List.length vars in
+          let nargs' =
+             if b.b_nargs = max_int then max_int
+             else if b.b_nargs < 0 then b.b_nargs
+             else b.b_nargs + extra in
+          let recargs' = List.map ((+) extra) b.b_recargs in
+          { b with b_nargs = nargs'; b_recargs = recargs' }
+        else b
+      in
+      let c = Lib.discharge_con c in
+      Some (ReqGlobal (ConstRef c, req), (ConstRef c, b))
     | _ -> None
 
   let rebuild = function
@@ -306,7 +313,8 @@ struct
       match c with
       | Cst_const (c, u) ->
 	if Univ.Instance.is_empty u then Constant.print c
-	else str"(" ++ Constant.print c ++ str ", " ++ Univ.Instance.pr u ++ str")"
+	else str"(" ++ Constant.print c ++ str ", " ++ 
+	  Univ.Instance.pr Univ.Level.pr u ++ str")"
       | Cst_proj p ->
 	str".(" ++ Constant.print (Projection.constant p) ++ str")"
 
@@ -841,7 +849,14 @@ let rec whd_state_gen ?csts tactic_mode flags env sigma =
 		    let (tm',sk'),cst_l' =
 		      whrec (Cst_stack.add_cst (mkConstU const) cst_l) (body, app_sk)
 		    in
-		      if equal_stacks (x, app_sk) (tm', sk') || Stack.will_expose_iota sk'
+		    let rec is_case x = match kind_of_term x with
+		      | Lambda (_,_, x) | LetIn (_,_,_, x) | Cast (x, _,_) -> is_case x
+		      | App (hd, _) -> is_case hd
+		      | Case _ -> true
+		      | _ -> false in
+		    if equal_stacks (x, app_sk) (tm', sk')
+		       || Stack.will_expose_iota sk'
+		       || is_case tm'
 		      then fold ()
 		      else whrec cst_l' (tm', sk' @ sk)
 		  else match recargs with
@@ -979,7 +994,7 @@ let rec whd_state_gen ?csts tactic_mode flags env sigma =
     | CoFix cofix ->
       if Closure.RedFlags.red_set flags Closure.RedFlags.fIOTA then
 	match Stack.strip_app stack with
-	|args, (Stack.Case(ci, _, lf,_)::s') ->
+	|args, ((Stack.Case _ |Stack.Proj _)::s') ->
 	  reduce_and_refold_cofix whrec env cst_l cofix stack
 	|_ -> fold ()
       else fold ()
@@ -1058,7 +1073,7 @@ let local_whd_state_gen flags sigma =
     | CoFix cofix ->
       if Closure.RedFlags.red_set flags Closure.RedFlags.fIOTA then
 	match Stack.strip_app stack with
-	|args, (Stack.Case(ci, _, lf,_)::s') ->
+	|args, ((Stack.Case _ | Stack.Proj _)::s') ->
 	  whrec (contract_cofix cofix, stack)
 	|_ -> s
       else s
@@ -1278,7 +1293,8 @@ let sigma_univ_state =
   { Reduction.compare = sigma_compare_sorts;
     Reduction.compare_instances = sigma_compare_instances }
 
-let infer_conv ?(pb=Reduction.CUMUL) ?(ts=full_transparent_state) env sigma x y = 
+let infer_conv ?(catch_incon=true) ?(pb=Reduction.CUMUL) ?(ts=full_transparent_state) 
+    env sigma x y = 
   try 
     let b, sigma = 
       let b, cstrs = 
@@ -1300,7 +1316,7 @@ let infer_conv ?(pb=Reduction.CUMUL) ?(ts=full_transparent_state) env sigma x y 
 	  sigma', true
   with
   | Reduction.NotConvertible -> sigma, false
-  | Univ.UniverseInconsistency _ -> sigma, false
+  | Univ.UniverseInconsistency _ when catch_incon -> sigma, false
   | e when is_anomaly e -> error "Conversion test raised an anomaly"
     
 (********************************************************************)
@@ -1616,3 +1632,16 @@ let head_unfold_under_prod ts env _ c =
 	    | Const cst -> beta_applist (unfold cst,l)
 	    | _ -> c in
   aux c
+
+let betazetaevar_applist sigma n c l =
+  let rec stacklam n env t stack =
+    if Int.equal n 0 then applist (substl env t, stack) else
+    match kind_of_term t, stack with
+    | Lambda(_,_,c), arg::stacktl -> stacklam (n-1) (arg::env) c stacktl
+    | LetIn(_,b,_,c), _ -> stacklam (n-1) (b::env) c stack
+    | Evar ev, _ ->
+      (match safe_evar_value sigma ev with
+      | Some body -> stacklam n env body stack
+      | None -> applist (substl env t, stack))
+    | _ -> anomaly (Pp.str "Not enough lambda/let's") in
+  stacklam n [] c l

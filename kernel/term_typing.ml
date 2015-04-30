@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -15,7 +15,6 @@
 open Errors
 open Util
 open Names
-open Univ
 open Term
 open Context
 open Declarations
@@ -101,10 +100,6 @@ let hcons_j j =
 
 let feedback_completion_typecheck =
   Option.iter (fun state_id -> Pp.feedback ~state_id Feedback.Complete)
-  
-let subst_instance_j s j =
-  { uj_val = Vars.subst_univs_level_constr s j.uj_val;
-    uj_type = Vars.subst_univs_level_constr s j.uj_type }
 
 let infer_declaration env kn dcl =
   match dcl with
@@ -248,10 +243,16 @@ let build_constant_declaration kn env (def,typ,proj,poly,univs,inline_code,ctx) 
               let inferred = keep_hyps env (Idset.union ids_typ ids_def) in
               check declared inferred) lc) in
   let tps = 
-    match proj with
-    | None -> Cemitcodes.from_val (compile_constant_body env def)
-    | Some pb ->
-      Cemitcodes.from_val (compile_constant_body env (Def (Mod_subst.from_val pb.proj_body)))
+    (* FIXME: incompleteness of the bytecode vm: we compile polymorphic 
+       constants like opaque definitions. *)
+    if poly then Some (Cemitcodes.from_val Cemitcodes.BCconstant)
+    else
+      let res = 
+	match proj with
+	| None -> compile_constant_body env def
+	| Some pb ->
+	   compile_constant_body env (Def (Mod_subst.from_val pb.proj_body))
+      in Option.map Cemitcodes.from_val res
   in
   { const_hyps = hyps;
     const_body = def;

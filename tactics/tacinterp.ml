@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -318,18 +318,16 @@ let interp_ltac_var coerce ist env locid =
   try try_interp_ltac_var coerce ist env locid
   with Not_found -> anomaly (str "Detected '" ++ Id.print (snd locid) ++ str "' as ltac var at interning time")
 
-let interp_ident_gen fresh ist env sigma id =
-  try try_interp_ltac_var (coerce_to_ident fresh env) ist (Some (env,sigma)) (dloc,id)
+let interp_ident ist env sigma id =
+  try try_interp_ltac_var (coerce_to_ident false env) ist (Some (env,sigma)) (dloc,id)
   with Not_found -> id
 
-let interp_ident = interp_ident_gen false
-let interp_fresh_ident = interp_ident_gen true
-let pf_interp_ident id gl = interp_ident_gen false id (pf_env gl) (project gl)
+let pf_interp_ident id gl = interp_ident id (pf_env gl) (project gl)
 
-(* Interprets an optional identifier which must be fresh *)
-let interp_fresh_name ist env sigma = function
+(* Interprets an optional identifier, bound or fresh *)
+let interp_name ist env sigma = function
   | Anonymous -> Anonymous
-  | Name id -> Name (interp_fresh_ident ist env sigma id)
+  | Name id -> Name (interp_ident ist env sigma id)
 
 let interp_intro_pattern_var loc ist env sigma id =
   try try_interp_ltac_var (coerce_to_intro_pattern env) ist (Some (env,sigma)) (loc,id)
@@ -496,8 +494,6 @@ let interp_fresh_id ist env sigma l =
       let s = if Lexer.is_keyword s then s^"0" else s in
       Id.of_string s in
   Tactics.fresh_id_in_env avoid id env
-
-
 
 (* Extract the uconstr list from lfun *)
 let extract_ltac_constr_context ist env =
@@ -683,7 +679,7 @@ let interp_constr_with_occurrences ist env sigma (occs,c) =
 let interp_closed_typed_pattern_with_occurrences ist env sigma (occs, a) =
   let p = match a with
   | Inl b -> Inl (interp_evaluable ist env sigma b)
-  | Inr c -> Inr (snd (interp_typed_pattern ist env sigma c)) in
+  | Inr c -> Inr (pi3 (interp_typed_pattern ist env sigma c)) in
   interp_occurrences ist occs, p
 
 let interp_constr_with_occurrences_and_name_as_list =
@@ -694,7 +690,7 @@ let interp_constr_with_occurrences_and_name_as_list =
     (fun ist env sigma (occ_c,na) ->
       let (sigma,c_interp) = interp_constr_with_occurrences ist env sigma occ_c in
       sigma, (c_interp,
-       interp_fresh_name ist env sigma na))
+       interp_name ist env sigma na))
 
 let interp_red_expr ist env sigma = function
   | Unfold l -> sigma , Unfold (List.map (interp_unfold ist env sigma) l)
@@ -729,7 +725,7 @@ let interp_may_eval f ist env sigma = function
 	let (sigma,ic) = f ist env sigma c in
 	let ctxt = coerce_to_constr_context (Id.Map.find s ist.lfun) in
 	let evdref = ref sigma in
-	let c = subst_meta [ConstrMatching.special_meta,ic] ctxt in
+	let c = subst_meta [Constr_matching.special_meta,ic] ctxt in
 	let c = Typing.solve_evars env evdref c in
 	!evdref , c
       with
@@ -844,7 +840,7 @@ let rec interp_intro_pattern ist env sigma = function
   | loc, IntroForthcoming _  as x -> sigma, x
 
 and interp_intro_pattern_naming loc ist env sigma = function
-  | IntroFresh id -> IntroFresh (interp_fresh_ident ist env sigma id)
+  | IntroFresh id -> IntroFresh (interp_ident ist env sigma id)
   | IntroIdentifier id -> interp_intro_pattern_naming_var loc ist env sigma id
   | IntroAnonymous as x -> x
 
@@ -1032,7 +1028,7 @@ let use_types = false
 
 let eval_pattern lfun ist env sigma (_,pat as c) =
   if use_types then
-    snd (interp_typed_pattern ist env sigma c)
+    pi3 (interp_typed_pattern ist env sigma c)
   else
     instantiate_pattern env sigma lfun pat
 
@@ -1189,7 +1185,7 @@ and eval_tactic ist tac : unit Proofview.tactic = match tac with
       msg_warning
 	(strbrk "The general \"info\" tactic is currently not working." ++ spc()++
            strbrk "There is an \"Info\" command to replace it." ++fnl () ++
-	   strbrk "Some specific verbose tactics may also exist, such as info_trivial, info_auto, info_eauto.");
+	   strbrk "Some specific verbose tactics may also exist, such as info_eauto.");
       eval_tactic ist tac
   (* For extensions *)
   | TacAlias (loc,s,l) ->
@@ -1215,7 +1211,7 @@ and eval_tactic ist tac : unit Proofview.tactic = match tac with
           | IntOrVarArgType ->
               Ftactic.return (mk_int_or_var_value ist (out_gen (glbwit wit_int_or_var) x))
           | IdentArgType ->
-              Ftactic.return (value_of_ident (interp_fresh_ident ist env sigma
+              Ftactic.return (value_of_ident (interp_ident ist env sigma
                                                (out_gen (glbwit wit_ident) x)))
           | VarArgType ->
               Ftactic.return (mk_hyp_value ist env sigma (out_gen (glbwit wit_var) x))
@@ -1256,7 +1252,7 @@ and eval_tactic ist tac : unit Proofview.tactic = match tac with
               Ftactic.return (in_gen (topwit (wit_list wit_genarg)) ans)
           | ListArgType IdentArgType ->
               let wit = glbwit (wit_list wit_ident) in
-              let mk_ident x = value_of_ident (interp_fresh_ident ist env sigma x) in
+              let mk_ident x = value_of_ident (interp_ident ist env sigma x) in
               let ans = List.map mk_ident (out_gen wit x) in
               Ftactic.return (in_gen (topwit (wit_list wit_genarg)) ans)
           | ListArgType t  ->
@@ -1528,8 +1524,8 @@ and interp_letin ist llc u =
   fold ist.lfun llc
 
 (** [interp_match_success lz ist succ] interprets a single matching success
-    (of type {!TacticMatching.t}). *)
-and interp_match_success ist { TacticMatching.subst ; context ; terms ; lhs } =
+    (of type {!Tactic_matching.t}). *)
+and interp_match_success ist { Tactic_matching.subst ; context ; terms ; lhs } =
   let (>>=) = Ftactic.bind in
   let lctxt = Id.Map.map interp_context context in
   let hyp_subst = Id.Map.map Value.of_constr terms in
@@ -1590,7 +1586,7 @@ and interp_match ist lz constr lmr =
     let sigma = Proofview.Goal.sigma gl in
     let env = Proofview.Goal.env gl in
     let ilr = read_match_rule (extract_ltac_constr_values ist env) ist env sigma lmr in
-    interp_match_successes lz ist (TacticMatching.match_term env sigma constr ilr)
+    interp_match_successes lz ist (Tactic_matching.match_term env sigma constr ilr)
   end
 
 (* Interprets the Match Context expressions *)
@@ -1602,7 +1598,7 @@ and interp_match_goal ist lz lr lmr =
       let hyps = if lr then List.rev hyps else hyps in
       let concl = Proofview.Goal.concl gl in
       let ilr = read_match_rule (extract_ltac_constr_values ist env) ist env sigma lmr in
-      interp_match_successes lz ist (TacticMatching.match_goal env sigma hyps concl ilr)
+      interp_match_successes lz ist (Tactic_matching.match_goal env sigma hyps concl ilr)
     end
 
 (* Interprets extended tactic generic arguments *)
@@ -1624,7 +1620,7 @@ and interp_genarg ist env sigma concl gl x =
         (ArgArg (interp_int_or_var ist (out_gen (glbwit wit_int_or_var) x)))
     | IdentArgType ->
       in_gen (topwit wit_ident)
-        (interp_fresh_ident ist env sigma (out_gen (glbwit wit_ident) x))
+        (interp_ident ist env sigma (out_gen (glbwit wit_ident) x))
     | VarArgType ->
       in_gen (topwit wit_var) (interp_hyp ist env sigma (out_gen (glbwit wit_var) x))
     | GenArgType ->
@@ -1785,19 +1781,19 @@ and interp_atomic ist tac : unit Proofview.tactic =
         let env = Proofview.Goal.env gl in
         let sigma = Proofview.Goal.sigma gl in
         let sigma,l' = interp_intro_pattern_list_as_list ist env sigma l in
-        Proofview.Unsafe.tclEVARS sigma <*>
-        name_atomic ~env
+        Tacticals.New.tclWITHHOLES false 
+        (name_atomic ~env
           (TacIntroPattern l)
           (* spiwack: print uninterpreted, not sure if it is the
              expected behaviour. *)
-          (Tactics.intros_patterns l')
+          (Tactics.intros_patterns l')) sigma
       end
   | TacIntroMove (ido,hto) ->
       Proofview.Goal.enter begin fun gl ->
         let env = Proofview.Goal.env gl in
         let sigma = Proofview.Goal.sigma gl in
         let mloc = interp_move_location ist env sigma hto in
-        let ido = Option.map (interp_fresh_ident ist env sigma) ido in
+        let ido = Option.map (interp_ident ist env sigma) ido in
         name_atomic ~env
           (TacIntroMove(ido,mloc))
           (Tactics.intro_move ido mloc)
@@ -1824,11 +1820,11 @@ and interp_atomic ist tac : unit Proofview.tactic =
 	    (k,(loc,f))) cb 
 	in
         let sigma,tac = match cl with
-          | None -> sigma, fun l -> Tactics.apply_with_delayed_bindings_gen a ev l
+          | None -> sigma, Tactics.apply_with_delayed_bindings_gen a ev l
           | Some cl ->
               let sigma,(clear,id,cl) = interp_in_hyp_as ist env sigma cl in
-              sigma, fun l -> Tactics.apply_delayed_in a ev clear id l cl in
-        Tacticals.New.tclWITHHOLES ev tac sigma l
+              sigma, Tactics.apply_delayed_in a ev clear id l cl in
+        Tacticals.New.tclWITHHOLES ev tac sigma
       end
       end
   | TacElim (ev,(keep,cb),cbo) ->
@@ -1837,28 +1833,28 @@ and interp_atomic ist tac : unit Proofview.tactic =
         let sigma = Proofview.Goal.sigma gl in 
         let sigma, cb = interp_constr_with_bindings ist env sigma cb in
         let sigma, cbo = Option.fold_map (interp_constr_with_bindings ist env) sigma cbo in
-        let named_tac cbo =
+        let named_tac =
           let tac = Tactics.elim ev keep cb cbo in
           name_atomic ~env (TacElim (ev,(keep,cb),cbo)) tac
         in
-        Tacticals.New.tclWITHHOLES ev named_tac sigma cbo
+        Tacticals.New.tclWITHHOLES ev named_tac sigma
       end
   | TacCase (ev,(keep,cb)) ->
       Proofview.Goal.enter begin fun gl ->
         let sigma = Proofview.Goal.sigma gl in
         let env = Proofview.Goal.env gl in
         let sigma, cb = interp_constr_with_bindings ist env sigma cb in
-        let named_tac cb =
+        let named_tac =
           let tac = Tactics.general_case_analysis ev keep cb in
           name_atomic ~env (TacCase(ev,(keep,cb))) tac
         in
-        Tacticals.New.tclWITHHOLES ev named_tac sigma cb
+        Tacticals.New.tclWITHHOLES ev named_tac sigma
       end
   | TacFix (idopt,n) ->
       Proofview.Goal.enter begin fun gl ->
         let env = Proofview.Goal.env gl in
         let sigma = Proofview.Goal.sigma gl in
-        let idopt = Option.map (interp_fresh_ident ist env sigma) idopt in
+        let idopt = Option.map (interp_ident ist env sigma) idopt in
         name_atomic ~env
           (TacFix(idopt,n))
           (Proofview.V82.tactic (Tactics.fix idopt n))
@@ -1870,13 +1866,13 @@ and interp_atomic ist tac : unit Proofview.tactic =
         let env = pf_env gl in
         let f sigma (id,n,c) =
 	  let (sigma,c_interp) = pf_interp_type ist { gl with sigma=sigma } c in
-	  sigma , (interp_fresh_ident ist env sigma id,n,c_interp) in
+	  sigma , (interp_ident ist env sigma id,n,c_interp) in
         let (sigma,l_interp) =
           Evd.MonadR.List.map_right (fun c sigma -> f sigma c) l (project gl)
         in
         tclTHEN
 	  (tclEVARS sigma)
-	  (Tactics.mutual_fix (interp_fresh_ident ist env sigma id) n l_interp 0)
+	  (Tactics.mutual_fix (interp_ident ist env sigma id) n l_interp 0)
           gl
       end
       end
@@ -1884,7 +1880,7 @@ and interp_atomic ist tac : unit Proofview.tactic =
       Proofview.Goal.enter begin fun gl ->
         let env = Proofview.Goal.env gl in
         let sigma = Proofview.Goal.sigma gl in
-        let idopt = Option.map (interp_fresh_ident ist env sigma) idopt in
+        let idopt = Option.map (interp_ident ist env sigma) idopt in
         name_atomic ~env
           (TacCofix (idopt))
           (Proofview.V82.tactic (Tactics.cofix idopt))
@@ -1896,13 +1892,13 @@ and interp_atomic ist tac : unit Proofview.tactic =
         let env = pf_env gl in
         let f sigma (id,c) =
 	  let (sigma,c_interp) = pf_interp_type ist { gl with sigma=sigma } c in
-	  sigma , (interp_fresh_ident ist env sigma id,c_interp) in
+	  sigma , (interp_ident ist env sigma id,c_interp) in
         let (sigma,l_interp) =
           Evd.MonadR.List.map_right (fun c sigma -> f sigma c) l (project gl)
         in
         tclTHEN
 	  (tclEVARS sigma)
-	  (Tactics.mutual_cofix (interp_fresh_ident ist env sigma id) l_interp 0)
+	  (Tactics.mutual_cofix (interp_ident ist env sigma id) l_interp 0)
           gl
       end
       end
@@ -1915,20 +1911,20 @@ and interp_atomic ist tac : unit Proofview.tactic =
         in
         let sigma, ipat' = interp_intro_pattern_option ist env sigma ipat in
         let tac = Option.map (interp_tactic ist) t in
-        Proofview.Unsafe.tclEVARS sigma <*>
-        name_atomic ~env
+        Tacticals.New.tclWITHHOLES false
+        (name_atomic ~env
           (TacAssert(b,t,ipat,c))
-          (Tactics.forward b tac ipat' c)
+          (Tactics.forward b tac ipat' c)) sigma
       end
   | TacGeneralize cl ->
       Proofview.Goal.enter begin fun gl ->
         let sigma = Proofview.Goal.sigma gl in
         let env = Proofview.Goal.env gl in
         let sigma, cl = interp_constr_with_occurrences_and_name_as_list ist env sigma cl in
-        Proofview.Unsafe.tclEVARS sigma <*>
-        name_atomic ~env
+        Tacticals.New.tclWITHHOLES false
+        (name_atomic ~env
           (TacGeneralize cl)
-          (Proofview.V82.tactic (Tactics.Simple.generalize_gen cl))
+          (Proofview.V82.tactic (Tactics.Simple.generalize_gen cl))) sigma
       end
   | TacGeneralizeDep c ->
       (new_interp_constr ist c) (fun c ->
@@ -1953,11 +1949,11 @@ and interp_atomic ist tac : unit Proofview.tactic =
             let with_eq = if b then None else Some (true,id) in
             Tactics.letin_tac with_eq na c None cl
           in
-	  Proofview.Unsafe.tclEVARS sigma <*>
-          let na = interp_fresh_name ist env sigma na in
-          name_atomic ~env
+          let na = interp_name ist env sigma na in
+          Tacticals.New.tclWITHHOLES false
+          (name_atomic ~env
             (TacLetTac(na,c_interp,clp,b,eqpat))
-            (let_tac b na c_interp clp eqpat)
+            (let_tac b na c_interp clp eqpat)) sigma
         else
         (* We try to keep the pattern structure as much as possible *)
           let let_pat_tac b na c cl eqpat =
@@ -1969,12 +1965,18 @@ and interp_atomic ist tac : unit Proofview.tactic =
           name_atomic ~env
             (TacLetTac(na,c,clp,b,eqpat))
 	    (Tacticals.New.tclWITHHOLES false (*in hope of a future "eset/epose"*)
-               (let_pat_tac b (interp_fresh_name ist env sigma na)
-                  ((sigma,sigma'),c) clp) sigma' eqpat)
+               (let_pat_tac b (interp_name ist env sigma na)
+                  ((sigma,sigma'),c) clp eqpat) sigma')
       end
 
   (* Automation tactics *)
   | TacTrivial (debug,lems,l) ->
+      begin if debug == Tacexpr.Info then
+          msg_warning
+	    (strbrk"The \"info_trivial\" tactic" ++ spc ()
+           ++strbrk"does not print traces anymore." ++ spc()
+           ++strbrk"Use \"Info 1 trivial\", instead.")
+      end;
       Proofview.Goal.enter begin fun gl ->
         let env = Proofview.Goal.env gl in
         let sigma = Proofview.Goal.sigma gl in
@@ -1986,6 +1988,12 @@ and interp_atomic ist tac : unit Proofview.tactic =
 	     (Option.map (List.map (interp_hint_base ist)) l))
       end
   | TacAuto (debug,n,lems,l) ->
+      begin if debug == Tacexpr.Info then
+          msg_warning
+	    (strbrk"The \"info_auto\" tactic" ++ spc ()
+           ++strbrk"does not print traces anymore." ++ spc()
+           ++strbrk"Use \"Info 1 auto\", instead.")
+      end;
       Proofview.Goal.enter begin fun gl ->
         let env = Proofview.Goal.env gl in
         let sigma = Proofview.Goal.sigma gl in
@@ -2067,7 +2075,7 @@ and interp_atomic ist tac : unit Proofview.tactic =
         let l =
           List.map (fun (id1,id2) ->
 	    interp_hyp ist env sigma id1,
-	    interp_fresh_ident ist env sigma (snd id2)) l
+	    interp_ident ist env sigma (snd id2)) l
         in
         name_atomic ~env
           (TacRename l)
@@ -2080,11 +2088,11 @@ and interp_atomic ist tac : unit Proofview.tactic =
         let env = Proofview.Goal.env gl in
         let sigma = Proofview.Goal.sigma gl in
         let sigma, bll = List.fold_map (interp_bindings ist env) sigma bll in
-        let named_tac bll =
+        let named_tac =
           let tac = Tactics.split_with_bindings ev bll in
           name_atomic ~env (TacSplit (ev, bll)) tac
         in
-        Tacticals.New.tclWITHHOLES ev named_tac sigma bll
+        Tacticals.New.tclWITHHOLES ev named_tac sigma
       end
   (* Conversion *)
   | TacReduce (r,cl) ->
@@ -2111,7 +2119,12 @@ and interp_atomic ist tac : unit Proofview.tactic =
           | AllOccurrences | NoOccurrences -> true
           | _ -> false
         in
-        let c_interp sigma =
+        let c_interp patvars sigma =
+	  let lfun' = Id.Map.fold (fun id c lfun ->
+	    Id.Map.add id (Value.of_constr c) lfun) 
+	    patvars ist.lfun
+	  in
+	  let ist = { ist with lfun = lfun' } in
 	  if is_onhyps && is_onconcl
 	  then interp_type ist (pf_env gl) sigma c
 	  else interp_constr ist (pf_env gl) sigma c
@@ -2128,16 +2141,20 @@ and interp_atomic ist tac : unit Proofview.tactic =
         let env = Proofview.Goal.env gl in
         let sigma = Proofview.Goal.sigma gl in
         Proofview.V82.tactic begin fun gl -> 
-          let sign,op = interp_typed_pattern ist env sigma op in
+          let (sigma,sign,op) = interp_typed_pattern ist env sigma op in
           let to_catch = function Not_found -> true | e -> Errors.is_anomaly e in
-	  let env' = Environ.push_named_context sign env in
-          let c_interp sigma =
-	      try interp_constr ist env' sigma c
+          let c_interp patvars sigma =
+	    let lfun' = Id.Map.fold (fun id c lfun ->
+	      Id.Map.add id (Value.of_constr c) lfun) 
+	      patvars ist.lfun
+	    in
+	    let ist = { ist with lfun = lfun' } in
+	      try interp_constr ist env sigma c
 	      with e when to_catch e (* Hack *) ->
 		errorlabstrm "" (strbrk "Failed to get enough information from the left-hand side to type the right-hand side.")
           in
-	      (Tactics.change (Some op) c_interp (interp_clause ist env sigma cl))
-		gl
+	    (Tactics.change (Some op) c_interp (interp_clause ist env sigma cl))
+	      { gl with sigma = sigma }
         end
       end
       end
@@ -2184,10 +2201,10 @@ and interp_atomic ist tac : unit Proofview.tactic =
         in
         let dqhyps = interp_declared_or_quantified_hypothesis ist env sigma hyp in
         let sigma,ids_interp = interp_or_and_intro_pattern_option ist env sigma ids in
-        Proofview.Unsafe.tclEVARS sigma <*>
-        name_atomic ~env
+        Tacticals.New.tclWITHHOLES false
+        (name_atomic ~env
           (TacInversion(DepInversion(k,c_interp,ids),dqhyps))
-          (Inv.dinv k c_interp ids_interp dqhyps)
+          (Inv.dinv k c_interp ids_interp dqhyps)) sigma
       end
   | TacInversion (NonDepInversion (k,idl,ids),hyp) ->
       Proofview.Goal.enter begin fun gl ->
@@ -2196,10 +2213,10 @@ and interp_atomic ist tac : unit Proofview.tactic =
         let hyps = interp_hyp_list ist env sigma idl in
         let dqhyps = interp_declared_or_quantified_hypothesis ist env sigma hyp in
         let sigma, ids_interp = interp_or_and_intro_pattern_option ist env sigma ids in
-        Proofview.Unsafe.tclEVARS sigma <*>
-        name_atomic ~env
+        Tacticals.New.tclWITHHOLES false
+        (name_atomic ~env
           (TacInversion (NonDepInversion (k,hyps,ids),dqhyps))
-          (Inv.inv_clause k ids_interp hyps dqhyps)
+          (Inv.inv_clause k ids_interp hyps dqhyps)) sigma
       end
   | TacInversion (InversionUsing (c,idl),hyp) ->
       Proofview.Goal.enter begin fun gl ->
@@ -2241,8 +2258,7 @@ let interp_tac_gen lfun avoid_ids debug t =
   let ltacvars = Id.Map.domain lfun in
   interp_tactic ist
     (intern_pure_tactic {
-      ltacvars; ltacrecvars = Id.Map.empty;
-      genv = env } t)
+      ltacvars; genv = env } t)
   end
 
 let interp t = interp_tac_gen Id.Map.empty [] (get_debug()) t
@@ -2252,8 +2268,7 @@ let _ = Proof_global.set_interp_tac interp
 (* [global] means that [t] should be internalized outside of goals. *)
 let hide_interp global t ot =
   let hide_interp env =
-    let ist = { ltacvars = Id.Set.empty; ltacrecvars = Id.Map.empty;
-                genv = env } in
+    let ist = { ltacvars = Id.Set.empty; genv = env } in
     let te = intern_pure_tactic ist t in
     let t = eval_tactic te in
     match ot with
@@ -2349,39 +2364,7 @@ let _ =
     if has_type arg (glbwit wit_tactic) then
       let tac = out_gen (glbwit wit_tactic) arg in
       let tac = interp_tactic ist tac in
-      (** Save the initial side-effects to restore them afterwards. We set the
-          current set of side-effects to be empty so that we can retrieve the
-          ones created during the tactic invocation easily. *)
-      let eff = Evd.eval_side_effects sigma in
-      let sigma = Evd.drop_side_effects sigma in
-      (** Start a proof *)
-      let prf = Proof.start sigma [env, ty] in
-      let (prf, _) =
-        try Proof.run_tactic env tac prf
-        with Logic_monad.TacticFailure e as src ->
-          (** Catch the inner error of the monad tactic *)
-          let (_, info) = Errors.push src in
-          iraise (e, info)
-      in
-      (** Plug back the retrieved sigma *)
-      let sigma = Proof.in_proof prf (fun sigma -> sigma) in
-      let ans = match Proof.initial_goals prf with
-      | [c, _] -> c
-      | _ -> assert false
-      in
-      let ans = Reductionops.nf_evar sigma ans in
-      (** [neff] contains the freshly generated side-effects *)
-      let neff = Evd.eval_side_effects sigma in
-      (** Reset the old side-effects *)
-      let sigma = Evd.drop_side_effects sigma in
-      let sigma = Evd.emit_side_effects eff sigma in
-      (** Get rid of the fresh side-effects by internalizing them in the term
-          itself. Note that this is unsound, because the tactic may have solved
-          other goals that were already present during its invocation, so that
-          those goals rely on effects that are not present anymore. Hopefully,
-          this hack will work in most cases. *)
-      let ans = Term_typing.handle_side_effects env ans neff in
-      ans, sigma
+      Pfedit.refine_by_tactic env sigma ty tac
     else
       failwith "not a tactic"
   in

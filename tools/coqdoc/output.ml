@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -595,7 +595,6 @@ module Html = struct
 	| '<' -> Buffer.add_string buff "&lt;"
 	| '>' -> Buffer.add_string buff "&gt;"
 	| '&' -> Buffer.add_string buff "&amp;"
-        | '\'' -> Buffer.add_string buff "&acute;"
         | '\"' -> Buffer.add_string buff "&quot;"
 	| c -> Buffer.add_char buff c
       done;

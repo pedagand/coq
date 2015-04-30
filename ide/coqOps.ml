@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -215,8 +215,24 @@ object(self)
       document_length <- pred document_length;
       segment#set_length document_length;
     in
+    let on_click id =
+      let find _ _ s = Int.equal s.index id in
+      let sentence = Doc.find document find in
+      let mark = sentence.start in
+      let iter = script#buffer#get_iter_at_mark mark in
+      (** Sentence starts tend to be at the end of a line, so we rather choose
+          the first non-line-ending position. *)
+      let rec sentence_start iter =
+        if iter#ends_line then sentence_start iter#forward_line
+        else iter
+      in
+      let iter = sentence_start iter in
+      script#buffer#place_cursor iter;
+      ignore (script#scroll_to_iter ~use_align:true ~yalign:0. iter)
+    in
     let _ = (Doc.connect document)#pushed on_push in
     let _ = (Doc.connect document)#popped on_pop in
+    let _ = segment#connect#clicked on_click in
     ()
 
   method private tooltip_callback ~x ~y ~kbd tooltip =
@@ -260,21 +276,11 @@ object(self)
     Doc.focus document ~cond_top:(at start) ~cond_bot:(at stop);
     self#print_stack;
     let qed_s = Doc.tip_data document in
-    buffer#apply_tag Tags.Script.read_only
-      ~start:((buffer#get_iter_at_mark qed_s.start)#forward_find_char
-        (fun c -> not(Glib.Unichar.isspace c)))
-      ~stop:(buffer#get_iter_at_mark qed_s.stop);
     buffer#move_mark ~where:(buffer#get_iter_at_mark qed_s.stop)
       (`NAME "stop_of_input")
 
   method private exit_focus =
     Minilib.log "Unfocusing";
-    begin try
-      let { start; stop } = Doc.tip_data document in
-      buffer#remove_tag Tags.Script.read_only
-        ~start:(buffer#get_iter_at_mark start)
-        ~stop:(buffer#get_iter_at_mark stop)
-    with Doc.Empty -> () end;
     Doc.unfocus document;
     self#print_stack;
     begin try
@@ -347,7 +353,7 @@ object(self)
        else if has_flag sentence `ERROR then [error_bg]
        else if has_flag sentence `INCOMPLETE then [incomplete]
        else [processed]) @
-      (if [ `UNSAFE ] = sentence.flags then [unjustified] else [])
+      (if has_flag sentence `UNSAFE then [unjustified] else [])
     in
     List.iter (fun t -> buffer#remove_tag t ~start ~stop) all_tags;
     List.iter (fun t -> buffer#apply_tag t ~start ~stop) tags
@@ -499,7 +505,7 @@ object(self)
       | Some (start, stop) ->
         if until n start stop then begin
           ()
-        end else if start#has_tag Tags.Script.processed then begin
+        end else if stop#backward_char#has_tag Tags.Script.processed then begin
           Queue.push (`Skip (start, stop)) queue;
           loop n stop
         end else begin
@@ -547,12 +553,15 @@ object(self)
       script#recenter_insert;
       match topstack with
       | [] -> self#show_goals_aux ?move_insert ()
-      | (_,s) :: _ -> self#backtrack_to_iter (buffer#get_iter_at_mark s.start) in
+      | (_,s)::_ -> self#backtrack_to_iter (buffer#get_iter_at_mark s.start) in
     let process_queue queue =
       let rec loop tip topstack =
         if Queue.is_empty queue then conclude topstack else
         match Queue.pop queue, topstack with
-        | `Skip(start,stop), [] -> assert false
+        | `Skip(start,stop), [] ->
+            logger Pp.Error "You muse close the proof with Qed or Admitted";
+            self#discard_command_queue queue;
+            conclude [] 
         | `Skip(start,stop), (_,s) :: topstack ->
             assert(start#equal (buffer#get_iter_at_mark s.start));
             assert(stop#equal (buffer#get_iter_at_mark s.stop));
@@ -646,10 +655,13 @@ object(self)
       buffer#remove_tag Tags.Script.unjustified ~start ~stop;
       buffer#remove_tag Tags.Script.tooltip ~start ~stop;
       buffer#remove_tag Tags.Script.to_process ~start ~stop;
+      buffer#remove_tag Tags.Script.error ~start ~stop;
+      buffer#remove_tag Tags.Script.error_bg ~start ~stop;
       buffer#move_mark ~where:start (`NAME "start_of_input")
     end;
     List.iter (fun { start } -> buffer#delete_mark start) seg;
-    List.iter (fun { stop } -> buffer#delete_mark stop) seg
+    List.iter (fun { stop } -> buffer#delete_mark stop) seg;
+    self#print_stack
 
   (** Wrapper around the raw undo command *)
   method private backtrack_to_id ?(move_insert=true) (to_id, unfocus_needed) =

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -160,7 +160,6 @@ val build_coq_sumbool : constr delayed
 (** Connectives 
    The False proposition *)
 val build_coq_False : constr delayed
-val build_coq_proof_admitted : constr delayed
 
 (** The True proposition and its unique proof *)
 val build_coq_True : constr delayed

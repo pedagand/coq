@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -186,11 +186,19 @@ object(self)
 
   method undo () =
     Minilib.log "UNDO";
-    self#with_lock_undo self#perform_undo ();
+    self#with_lock_undo begin fun () ->
+      buffer#begin_user_action ();
+      self#perform_undo ();
+      buffer#end_user_action ()
+    end ()
 
   method redo () =
     Minilib.log "REDO";
-    self#with_lock_undo self#perform_redo ();
+    self#with_lock_undo begin fun () ->
+      buffer#begin_user_action ();
+      self#perform_redo ();
+      buffer#end_user_action ()
+    end ()
 
   method process_begin_user_action () =
     (* Push a new level of event on history stack *)
@@ -410,6 +418,7 @@ object (self)
       self#buffer#end_user_action ()
 
   initializer
+    let () = Gtk_parsing.fix_double_click self in
     let supersed cb _ =
       let _ = cb () in
       GtkSignal.stop_emit()

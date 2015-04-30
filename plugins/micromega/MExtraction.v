@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -34,7 +34,7 @@ Extract Inductive sumor => option [ Some None ].
    -  rightmost choice (Inright) is (None) *)
 
 
-(** To preserve its laziness, andb is normally expansed.
+(** To preserve its laziness, andb is normally expanded.
     Let's rather use the ocaml && *)
 Extract Inlined Constant andb => "(&&)".
 

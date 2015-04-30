@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -8,7 +8,6 @@
 
 open Names
 open Term
-open Evd
 open Coqlib
 
 (** High-order patterns *)
@@ -145,8 +144,6 @@ val is_matching_sigma : constr -> bool
 val match_eqdec : constr -> bool * constr * constr * constr * constr
 
 (** Match an equality up to conversion; returns [(eq,t1,t2)] in normal form *)
-open Proof_type
-open Tacmach
 val dest_nf_eq : [ `NF ] Proofview.Goal.t -> constr -> (constr * constr * constr)
 
 (** Match a negation *)

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -21,9 +21,6 @@ sig
   val tooltip : GText.tag
   val edit_zone : GText.tag (* for debugging *)
   val all : GText.tag list
-
-  (* Not part of the all list. Special tags! *)
-  val read_only : GText.tag
 end
 
 module Proof :
@@ -53,3 +50,13 @@ val set_processing_color : Gdk.color -> unit
 
 val get_error_color : unit -> Gdk.color
 val set_error_color : Gdk.color -> unit
+
+val get_error_fg_color : unit -> Gdk.color
+val set_error_fg_color : Gdk.color -> unit
+
+val default_processed_color : string
+val default_processing_color : string
+val default_error_color : string
+val default_error_fg_color : string
+val default_color : string
+

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -87,3 +87,6 @@ val subst_univs_level_context : Univ.universe_level_subst -> rel_context -> rel_
 (** Instance substitution for polymorphism. *)
 val subst_instance_constr : universe_instance -> constr -> constr
 val subst_instance_context : universe_instance -> rel_context -> rel_context
+
+type id_key = pconstant tableKey
+val eq_id_key : id_key -> id_key -> bool

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2013     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -37,7 +37,7 @@
  * If you compare this with lazy_t, you see that the value returned is *false*,
  * that is counter intuitive and error prone.
  *
- * Still not all computations are impure and acess/alter the system state.
+ * Still not all computations are impure and access/alter the system state.
  * This class can be optimized by using ~pure:true, but there is no way to
  * statically check if this flag is misused, hence use it with care.
  *
@@ -63,7 +63,7 @@ end
 module UUIDMap : Map.S with type key = UUID.t
 module UUIDSet : Set.S with type elt = UUID.t
 
-exception NotReady
+exception NotReady of string
 
 type 'a computation
 type 'a value = [ `Val of 'a | `Exn of Exninfo.iexn ]
@@ -100,7 +100,8 @@ val fix_exn_of : 'a computation -> fix_exn
    delage assigns it. *)
 type 'a assignement = [ `Val of 'a | `Exn of Exninfo.iexn | `Comp of 'a computation]
 val create_delegate :
-  ?blocking:bool -> fix_exn -> 'a computation * ('a assignement -> unit)
+  ?blocking:bool -> name:string ->
+  fix_exn -> 'a computation * ('a assignement -> unit)
 
 (* Given a computation that is_exn, replace it by another one *)
 val replace : 'a computation -> 'a computation -> unit

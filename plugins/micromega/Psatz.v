@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -96,6 +96,14 @@ Ltac psatzl dom :=
 Ltac lra := 
   first [ psatzl R | psatzl Q ].
 
+Ltac nra := 
+  unfold Rdiv in * ; 
+  xnra ;     
+  abstract 
+    (intros __wit __varmap __ff ;
+     change (Tauto.eval_f (Reval_formula (@find R 0%R __varmap)) __ff) ;
+     apply (RTautoChecker_sound __ff __wit); vm_compute ; reflexivity).
+                                                                       
 
 
 (* Local Variables: *)

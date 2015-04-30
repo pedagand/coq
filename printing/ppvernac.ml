@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -740,9 +740,14 @@ module Make
 
         | VernacEndProof (Proved (opac,o)) -> return (
           match o with
-            | None -> if opac then keyword "Qed" else keyword "Defined"
+            | None -> (match opac with
+                | Transparent -> keyword "Defined"
+                | Opaque None -> keyword "Qed"
+                | Opaque (Some l) ->
+                    keyword "Qed" ++ spc() ++ str"export" ++
+                      prlist_with_sep (fun () -> str", ") pr_lident l)
             | Some (id,th) -> (match th with
-                | None -> (if opac then keyword "Save" else keyword "Defined") ++ spc() ++ pr_lident id
+                | None -> (if opac <> Transparent then keyword "Save" else keyword "Defined") ++ spc() ++ pr_lident id
                 | Some tok -> keyword "Save" ++ spc() ++ pr_thm_token tok ++ spc() ++ pr_lident id)
         )
         | VernacExactProof c ->
@@ -858,10 +863,14 @@ module Make
         | VernacNameSectionHypSet (id,set) ->
           return (hov 2 (keyword "Package" ++ spc() ++ pr_lident id ++ spc()++
           str ":="++spc()++pr_using set))
-        | VernacRequire (exp, l) ->
+        | VernacRequire (from, exp, l) ->
+          let from = match from with
+          | None -> mt ()
+          | Some r -> keyword "From" ++ spc () ++ pr_module r ++ spc ()
+          in
           return (
             hov 2
-              (keyword "Require" ++ spc() ++ pr_require_token exp ++
+              (from ++ keyword "Require" ++ spc() ++ pr_require_token exp ++
                  prlist_with_sep sep pr_module l)
           )
         | VernacImport (f,l) ->

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -8,7 +8,6 @@
 
 open Names
 open Context
-open Evd
 open Environ
 open Constrexpr
 open Typeclasses
@@ -33,7 +32,7 @@ val declare_instance_constant :
   ?hook:(Globnames.global_reference -> unit) ->
   Id.t -> (** name *)
   bool -> (* polymorphic *)
-  Univ.universe_context -> (* Universes *)
+  Univ.universe_context_set -> (* Universes *)
   Constr.t -> (** body *)
   Term.types -> (** type *)
   Names.Id.t

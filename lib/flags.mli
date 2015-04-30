@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -12,7 +12,7 @@ val boot : bool ref
 val load_init : bool ref
 
 val batch_mode : bool ref
-type compilation_mode = BuildVo | BuildVi | Vi2Vo
+type compilation_mode = BuildVo | BuildVio | Vio2Vo
 val compilation_mode : compilation_mode ref
 
 type async_proofs = APoff | APonLazy | APon

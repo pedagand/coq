@@ -1,3 +1,4 @@
+Require Import TestSuite.admit.
 (* -*- coq-prog-args: ("-emacs" "-impredicative-set") -*- *)
 (* File reduced by coq-bug-finder from original input, then from 5968 lines to 11933 lines, then from 11239 lines to 11231 lines, then from 10365 lines to 446 lines, then from 456 lines to 379 lines, then from 391 lines to 373 lines, then from 369 lines to 351 lines, then from 350 lines to 340 lines, then from 348 lines to 320 lines, then from 328 lines to 302 lines *)
 Set Universe Polymorphism.
@@ -321,6 +322,13 @@ Definition ispartlbinopabmonoidfracrel_type : Type :=
   forall ( X : abmonoid ) ( A : @subabmonoids X ) { L : hrel X } ( z : abmonoidfrac X A ), 
     @abmonoidfracrel X A ( ( admit + z ) )admit.
 
-Axiom ispartlbinopabmonoidfracrel : $(let t:= eval unfold ispartlbinopabmonoidfracrel_type in
+Fail Timeout 1 Axiom ispartlbinopabmonoidfracrel' : $(let t:= eval unfold ispartlbinopabmonoidfracrel_type in
+                                      ispartlbinopabmonoidfracrel_type in exact t)$.
+
+Unset Kernel Term Sharing.
+
+Axiom ispartlbinopabmonoidfracrel : forall ( X : abmonoid ) ( A : @subabmonoids X ) { L : hrel X } ( z : abmonoidfrac X A ) , @abmonoidfracrel X A ( ( admit + z ) )admit.
+
+Axiom ispartlbinopabmonoidfracrel' : $(let t:= eval unfold ispartlbinopabmonoidfracrel_type in
                                       ispartlbinopabmonoidfracrel_type in exact t)$.
 

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -84,14 +84,15 @@ let pr_exit_status = function
   | _ -> " failed"
 
 let make_coqtop_args = function
-  |None -> !sup_args
+  |None -> "", !sup_args
   |Some the_file ->
     let get_args f = Project_file.args_from_project f
       !custom_project_files prefs.project_file_name
     in
     match prefs.read_project with
-      |Ignore_args -> !sup_args
-      |Append_args -> get_args the_file @ !sup_args
+      |Ignore_args -> "", !sup_args
+      |Append_args ->
+         let fname, args = get_args the_file in fname, args @ !sup_args
       |Subst_args -> get_args the_file
 
 (** Setting drag & drop on widgets *)
@@ -120,7 +121,10 @@ let set_drag (w : GObj.drag_ops) =
 (** Session management *)
 
 let create_session f =
-  let ans = Session.create f (make_coqtop_args f) in
+  let project_file, args = make_coqtop_args f in
+  if project_file <> "" then
+    flash_info (Printf.sprintf "Reading options from %s" project_file);
+  let ans = Session.create f args in
   let _ = set_drag ans.script#drag in
   ans
 
@@ -249,10 +253,13 @@ let newfile _ =
   !refresh_editor_hook ();
   notebook#goto_page index
 
-let load _ =
-  match select_file_for_open ~title:"Load file" () with
+let load sn =
+  let filename = sn.fileops#filename in
+  match select_file_for_open ~title:"Load file" ?filename () with
     | None -> ()
     | Some f -> FileAux.load_file f
+
+let load = cb_on_current_term load
 
 let save _ = on_current_term (FileAux.check_save ~saveas:false)
 
@@ -530,7 +537,7 @@ let update_status sn =
       | None -> ""
       | Some n -> ", proving " ^ n
     in
-    display ("Ready"^ if current.nanoPG then ", [μPG]" else "" ^ path ^ name);
+    display ("Ready"^ (if current.nanoPG then ", [μPG]" else "") ^ path ^ name);
     Coq.return ()
   in
   Coq.bind (Coq.status ~logger:sn.messages#push false) next
@@ -588,13 +595,24 @@ let get_current_word term =
   | Some p -> p
   | None ->
   (** Then look at the current selected word *)
-  if term.script#buffer#has_selection then
-    let (start, stop) = term.script#buffer#selection_bounds in
+  let buf1 = term.script#buffer in
+  let buf2 = term.proof#buffer in
+  let buf3 = term.messages#buffer in
+  if buf1#has_selection then
+    let (start, stop) = buf1#selection_bounds in
+    buf1#get_text ~slice:true ~start ~stop ()
+  else if buf2#has_selection then
+    let (start, stop) = buf2#selection_bounds in
+    buf2#get_text ~slice:true ~start ~stop ()
+  else if buf3#has_selection then
+    let (start, stop) = buf3#selection_bounds in
+    buf3#get_text ~slice:true ~start ~stop ()
+  (** Otherwise try to find the word around the cursor *)
+  else
+    let it = term.script#buffer#get_iter_at_mark `INSERT in
+    let start = find_word_start it in
+    let stop = find_word_end start in
     term.script#buffer#get_text ~slice:true ~start ~stop ()
-  (** Otherwise try to recover the clipboard *)
-  else match Ideutils.cb#text with
-  | Some t -> t
-  | None -> ""
 
 let print_branch c l =
   Format.fprintf c " | @[<hov 1>%a@]=> _@\n"
@@ -838,10 +856,16 @@ let refresh_editor_prefs () =
     sn.command#refresh_font ();
 
     (* Colors *)
+    Tags.set_processing_color (Tags.color_of_string current.processing_color);
+    Tags.set_processed_color (Tags.color_of_string current.processed_color);
+    Tags.set_error_color (Tags.color_of_string current.error_color);
+    Tags.set_error_fg_color (Tags.color_of_string current.error_fg_color);
     sn.script#misc#modify_base [`NORMAL, `COLOR clr];
     sn.proof#misc#modify_base [`NORMAL, `COLOR clr];
-    sn.messages#misc#modify_base [`NORMAL, `COLOR clr];
-    sn.command#refresh_color ()
+    sn.messages#refresh_color ();
+    sn.command#refresh_color ();
+    sn.errpage#refresh_color ();
+    sn.jobpage#refresh_color ();
 
   in
   List.iter iter_session notebook#pages
@@ -1135,14 +1159,14 @@ let build_ui () =
 
   menu templates_menu [
     item "Templates" ~label:"Te_mplates";
-    template_item ("Lemma new_lemma : .\nProof.\n\nSave.\n", 6,9, "L");
+    template_item ("Lemma new_lemma : .\nProof.\n\nSave.\n", 6,9, "J");
     template_item ("Theorem new_theorem : .\nProof.\n\nSave.\n", 8,11, "T");
     template_item ("Definition ident := .\n", 11,5, "E");
     template_item ("Inductive ident : :=\n  | : .\n", 10,5, "I");
     template_item ("Fixpoint ident (_ : _) {struct _} : _ :=\n.\n", 9,5, "F");
     template_item ("Scheme new_scheme := Induction for _ Sort _\n" ^
                    "with _ := Induction for _ Sort _.\n", 7,10, "S");
-    item "match" ~label:"match ..." ~accel:(prefs.modifier_for_templates^"C")
+    item "match" ~label:"match ..." ~accel:(prefs.modifier_for_templates^"M")
       ~callback:match_callback
   ];
   alpha_items templates_menu "Template" Coq_commands.commands;
@@ -1150,13 +1174,12 @@ let build_ui () =
   let qitem s accel = item s ~label:("_"^s) ?accel ~callback:(Query.query s) in
   menu queries_menu [
     item "Queries" ~label:"_Queries";
-    qitem "Search" (Some "F2");
-    qitem "Check" (Some "F3");
-    qitem "Print" (Some "F4");
-    qitem "About" (Some "F5");
-    qitem "Locate" None;
-    qitem "Print Assumptions" None;
-    qitem "Whelp Locate" None;
+    qitem "Search" (Some "<Ctrl><Shift>K");
+    qitem "Check" (Some "<Ctrl><Shift>C");
+    qitem "Print" (Some "<Ctrl><Shift>P");
+    qitem "About" (Some "<Ctrl><Shift>A");
+    qitem "Locate" (Some "<Ctrl><Shift>L");
+    qitem "Print Assumptions" (Some "<Ctrl><Shift>N");
   ];
 
   menu tools_menu [
@@ -1314,8 +1337,6 @@ let build_ui () =
   refresh_tabs_hook := refresh_notebook_pos;
 
   (* Color configuration *)
-  Tags.set_processing_color (Tags.color_of_string prefs.processing_color);
-  Tags.set_processed_color (Tags.color_of_string prefs.processed_color);
   Tags.Script.incomplete#set_property
     (`BACKGROUND_STIPPLE
       (Gdk.Bitmap.create_from_data ~width:2 ~height:2 "\x01\x02"));

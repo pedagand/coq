@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -41,12 +41,14 @@ let pr_language = function
   | Ocaml -> str "Ocaml"
   | Haskell -> str "Haskell"
   | Scheme -> str "Scheme"
+  | JSON -> str "JSON"
 
 VERNAC ARGUMENT EXTEND language
 PRINTED BY pr_language
 | [ "Ocaml" ] -> [ Ocaml ]
 | [ "Haskell" ] -> [ Haskell ]
 | [ "Scheme" ] -> [ Scheme ]
+| [ "JSON" ] -> [ JSON ]
 END
 
 (* Extraction commands *)

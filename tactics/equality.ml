@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -487,9 +487,6 @@ let apply_special_clear_request clear_flag f =
       e when catchable_exception e -> tclIDTAC
   end
 
-type delayed_open_constr_with_bindings =
-    env -> evar_map -> evar_map * constr with_bindings
-
 let general_multi_rewrite with_evars l cl tac =
   let do1 l2r f =
     Proofview.Goal.enter begin fun gl ->
@@ -497,7 +494,7 @@ let general_multi_rewrite with_evars l cl tac =
       let env = Proofview.Goal.env gl in
       let sigma,c = f env sigma in
       tclWITHHOLES with_evars
-        (general_rewrite_clause l2r with_evars ?tac c) sigma cl
+        (general_rewrite_clause l2r with_evars ?tac c cl) sigma
     end
   in
   let rec doN l2r c = function
@@ -1233,8 +1230,6 @@ let try_delta_expand env sigma t =
 let eq_dec_scheme_kind_name = ref (fun _ -> failwith "eq_dec_scheme undefined")
 let set_eq_dec_scheme_kind k = eq_dec_scheme_kind_name := (fun _ -> k)
 
-let eqdep_dec = qualid_of_string "Coq.Logic.Eqdep_dec"
-
 let inject_if_homogenous_dependent_pair ty =
   Proofview.Goal.nf_enter begin fun gl ->
   try
@@ -1257,7 +1252,7 @@ let inject_if_homogenous_dependent_pair ty =
     (* knows inductive types *)
     if not (Ind_tables.check_scheme (!eq_dec_scheme_kind_name()) (fst ind) &&
       pf_apply is_conv gl ar1.(2) ar2.(2)) then raise Exit;
-    Library.require_library [Loc.ghost,eqdep_dec] (Some false);
+    Coqlib.check_required_library ["Coq";"Logic";"Eqdep_dec"];
     let new_eq_args = [|pf_type_of gl ar1.(3);ar1.(3);ar2.(3)|] in
     let inj2 = Coqlib.coq_constant "inj_pair2_eq_dec is missing"
       ["Logic";"Eqdep_dec"] "inj_pair2_eq_dec" in
@@ -1437,7 +1432,7 @@ let decomp_tuple_term env c t =
       and cdr_code = applist (mkConstU (destConstRef p2,i),[a;p;inner_code]) in
       let cdrtyp = beta_applist (p,[car]) in
       List.map (fun l -> ((car,a),car_code)::l) (decomprec cdr_code cdr cdrtyp)
-    with ConstrMatching.PatternMatchingFailure ->
+    with Constr_matching.PatternMatchingFailure ->
       []
     in [((ex,exty),inner_code)]::iterated_decomp
   in decomprec (mkRel 1) c t
@@ -1474,8 +1469,6 @@ let subst_tuple_term env sigma dep_pair1 dep_pair2 b =
 (* then it uses the predicate "\x.phi(proj1_sig x,proj2_sig x)", and so   *)
 (* on for further iterated sigma-tuples                                   *)
 
-exception NothingToRewrite
-
 let cutSubstInConcl l2r eqn =
   Proofview.Goal.nf_enter begin fun gl ->
   let (lbeq,u,(t,e1,e2)) = find_eq_data_decompose gl eqn in
@@ -1500,22 +1493,19 @@ let cutSubstInHyp l2r eqn id =
   tclTHENFIRST
     (tclTHENLIST [
        (Proofview.Unsafe.tclEVARS sigma);
-       (change_in_hyp None (fun s -> s,typ) (id,InHypTypeOnly));
+       (change_in_hyp None (make_change_arg typ) (id,InHypTypeOnly));
        (replace_core (onHyp id) l2r eqn)
     ])
-    (change_in_hyp None (fun s -> s,expected) (id,InHypTypeOnly))
+    (change_in_hyp None (make_change_arg expected) (id,InHypTypeOnly))
   end
 
 let try_rewrite tac =
   Proofview.tclORELSE tac begin function (e, info) -> match e with
-    | ConstrMatching.PatternMatchingFailure ->
+    | Constr_matching.PatternMatchingFailure ->
 	tclZEROMSG (str "Not a primitive equality here.")
     | e when catchable_exception e ->
 	tclZEROMSG
           (strbrk "Cannot find a well-typed generalization of the goal that makes the proof progress.")
-    | NothingToRewrite ->
-	tclZEROMSG
-          (strbrk "Nothing to rewrite.")
     | e -> Proofview.tclZERO ~info e
   end
 
@@ -1581,7 +1571,7 @@ let unfold_body x =
 let restrict_to_eq_and_identity eq = (* compatibility *)
   if not (is_global glob_eq eq) &&
     not (is_global glob_identity eq) 
-  then raise ConstrMatching.PatternMatchingFailure
+  then raise Constr_matching.PatternMatchingFailure
 
 exception FoundHyp of (Id.t * constr * bool)
 
@@ -1592,7 +1582,7 @@ let is_eq_x gl x (id,_,c) =
     let (_,lhs,rhs) = pi3 (find_eq_data_decompose gl c) in
     if (Term.eq_constr x lhs) && not (occur_term x rhs) then raise (FoundHyp (id,rhs,true));
     if (Term.eq_constr x rhs) && not (occur_term x lhs) then raise (FoundHyp (id,lhs,false))
-  with ConstrMatching.PatternMatchingFailure ->
+  with Constr_matching.PatternMatchingFailure ->
     ()
 
 (* Rewrite "hyp:x=rhs" or "hyp:rhs=x" (if dir=false) everywhere and
@@ -1684,7 +1674,7 @@ let subst_all ?(flags=default_subst_tactic_flags ()) () =
       if Term.eq_constr x y then failwith "caught";
       match kind_of_term x with Var x -> x | _ ->
       match kind_of_term y with Var y -> y | _ -> failwith "caught"
-    with ConstrMatching.PatternMatchingFailure -> failwith "caught"
+    with Constr_matching.PatternMatchingFailure -> failwith "caught"
   in
   let test p = try Some (test p) with Failure _ -> None in
   let hyps = pf_hyps_types gl in
@@ -1700,13 +1690,13 @@ let cond_eq_term_left c t gl =
   try
     let (_,x,_) = pi3 (find_eq_data_decompose gl t) in
     if pf_conv_x gl c x then true else failwith "not convertible"
-  with ConstrMatching.PatternMatchingFailure -> failwith "not an equality"
+  with Constr_matching.PatternMatchingFailure -> failwith "not an equality"
 
 let cond_eq_term_right c t gl =
   try
     let (_,_,x) = pi3 (find_eq_data_decompose gl t) in
     if pf_conv_x gl c x then false else failwith "not convertible"
-  with ConstrMatching.PatternMatchingFailure -> failwith "not an equality"
+  with Constr_matching.PatternMatchingFailure -> failwith "not an equality"
 
 let cond_eq_term c t gl =
   try
@@ -1714,7 +1704,7 @@ let cond_eq_term c t gl =
     if pf_conv_x gl c x then true
     else if pf_conv_x gl c y then false
     else failwith "not convertible"
-  with ConstrMatching.PatternMatchingFailure -> failwith "not an equality"
+  with Constr_matching.PatternMatchingFailure -> failwith "not an equality"
 
 let rewrite_assumption_cond cond_eq_term cl =
   let rec arec hyps gl = match hyps with

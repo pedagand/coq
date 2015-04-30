@@ -10,7 +10,7 @@
 \label{typeclasses}
 
 \begin{flushleft}
-  \em The status of Type Classes is (extremely) experimental.
+  \em The status of Type Classes is experimental.
 \end{flushleft}
 
 This chapter presents a quick reference of the commands related to type
@@ -107,7 +107,7 @@ satisfied by \texttt{{eqa : EqDec A}}. In case no satisfying constraint can be
 found, an error is raised:
 
 \begin{coq_example}
-Definition neqb' (A : Type) (x y : A) := negb (eqb x y).
+Fail Definition neqb' (A : Type) (x y : A) := negb (eqb x y).
 \end{coq_example}
 
 The algorithm used to solve constraints is a variant of the eauto tactic
@@ -127,7 +127,7 @@ particular support for type classes:
   class arguments, making derived functions as easy to use as class
   methods. In the example above, \texttt{A} and \texttt{eqa} should be
   set maximally implicit.
-\item They support implicit quantification on partialy applied type
+\item They support implicit quantification on partially applied type
   classes (\S \ref{implicit-generalization}).
   Any argument not given as part of a type class binder will be
   automatically generalized.
@@ -326,7 +326,8 @@ An arbitrary context of the form {\tt \binder$_1$ \ldots \binder$_n$}
 can be put after the name of the instance and before the colon to
 declare a parameterized instance.
 An optional \textit{priority} can be declared, 0 being the highest
-priority as for auto hints.
+priority as for auto hints. If the priority is not specified, it defaults to
+$n$, the number of binders of the instance.
 
 \begin{Variants}
 \item {\tt Instance {\ident} {\binder$_1$ \ldots \binder$_n$} :
@@ -414,9 +415,9 @@ based on a variant of eauto. The flags semantics are:
 \end{itemize}
 
 \subsection{\tt Set Refine Instance Mode}
-\comindex{Set Refine Instance Mode}\comindex{Unset Refine Instance Mode}
+\optindex{Refine Instance Mode}
 
-The option {\tt Refine Instance Mode} allows to switch the behaviour of instance
+The option {\tt Refine Instance Mode} allows to switch the behavior of instance
 declarations made through the {\tt Instance} command.
 \begin{itemize}
 \item When it is on (the default), instances that have unsolved holes in their

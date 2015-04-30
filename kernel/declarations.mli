@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -70,7 +70,7 @@ type constant_body = {
     const_hyps : Context.section_context; (** New: younger hyp at top *)
     const_body : constant_def;
     const_type : constant_type;
-    const_body_code : Cemitcodes.to_patch_substituted;
+    const_body_code : Cemitcodes.to_patch_substituted option;
     const_polymorphic : bool; (** Is it polymorphic or not *)
     const_universes : constant_universes;
     const_proj : projection_body option;
@@ -139,7 +139,7 @@ type one_inductive_body = {
 
     mind_kelim : sorts_family list; (** List of allowed elimination sorts *)
 
-    mind_nf_lc : types array; (** Head normalized constructor types so that their conclusion is atomic *)
+    mind_nf_lc : types array; (** Head normalized constructor types so that their conclusion exposes the inductive type *)
 
     mind_consnrealargs : int array;
  (** Number of expected proper arguments of the constructors (w/o params)
@@ -172,7 +172,7 @@ type mutual_inductive_body = {
 
     mind_hyps : Context.section_context;  (** Section hypotheses on which the block depends *)
 
-    mind_nparams : int;  (** Number of expected parameters *)
+    mind_nparams : int;  (** Number of expected parameters including non-uniform ones (i.e. length of mind_params_ctxt w/o let-in) *)
 
     mind_nparams_rec : int;  (** Number of recursively uniform (i.e. ordinary) parameters *)
 
@@ -202,7 +202,7 @@ type ('ty,'a) functorize =
 
 type with_declaration =
   | WithMod of Id.t list * module_path
-  | WithDef of Id.t list * constr
+  | WithDef of Id.t list * constr Univ.in_universe_context
 
 type module_alg_expr =
   | MEident of module_path
@@ -251,17 +251,11 @@ and module_body =
     mod_delta : Mod_subst.delta_resolver;
     mod_retroknowledge : Retroknowledge.action list }
 
-(** A [module_type_body] is similar to a [module_body], with
-    no implementation and retroknowledge fields *)
+(** A [module_type_body] is just a [module_body] with no
+    implementation ([mod_expr] always [Abstract]) and also
+    an empty [mod_retroknowledge] *)
 
-and module_type_body =
-  { typ_mp : module_path; (** path of the module type *)
-    typ_expr : module_signature; (** expanded type *)
-    (** algebraic expression, kept if it's relevant for extraction  *)
-    typ_expr_alg : module_expression option;
-    typ_constraints : Univ.constraints;
-    (** quotiented set of equivalent constants and inductive names *)
-    typ_delta : Mod_subst.delta_resolver}
+and module_type_body = module_body
 
 (** Extra invariants :
 

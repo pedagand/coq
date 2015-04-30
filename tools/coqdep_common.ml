@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -9,6 +9,7 @@
 open Printf
 open Coqdep_lexer
 open Unix
+open System
 
 (** [coqdep_boot] is a stripped-down version of [coqdep], whose
     behavior is the one of [coqdep -boot]. Its only dependencies
@@ -27,25 +28,10 @@ let option_boot = ref false
 let option_mldep = ref None
 
 let norec_dirs = ref ([] : string list)
-let norec_dirnames = ref ["CVS"; "_darcs"]
 
 let suffixe = ref ".vo"
 
 type dir = string option
-
-(* Filename.concat but always with a '/' *)
-let is_dir_sep s i =
-  match Sys.os_type with
-  | "Unix" -> s.[i] = '/'
-  | "Cygwin" | "Win32" ->
-    let c = s.[i] in c = '/' || c = '\\' || c = ':'
-  | _ -> assert false
-
-let (//) dirname filename =
-  let l = String.length dirname in
-  if l = 0 || is_dir_sep dirname (l-1)
-  then dirname ^ filename
-  else dirname ^ "/" ^ filename
 
 (** [get_extension f l] checks whether [f] has one of the extensions
     listed in [l]. It returns [f] without its extension, alongside with
@@ -103,20 +89,21 @@ let safe_hash_add cmp clq q (k,v) =
     For the ML files, the string is the basename without extension.
 *)
 
-let warning_ml_clash x s s' suff =
+let warning_ml_clash x s suff s' suff' =
+  if suff = suff' then
   eprintf
     "*** Warning: %s%s already found in %s (discarding %s%s)\n" x suff
     (match s with None -> "." | Some d -> d)
     ((match s' with None -> "." | Some d -> d) // x) suff
 
 let mkknown () =
-  let h = (Hashtbl.create 19 : (string, dir) Hashtbl.t) in
+  let h = (Hashtbl.create 19 : (string, dir * string) Hashtbl.t) in
   let add x s suff =
-    try let s' = Hashtbl.find h x in warning_ml_clash x s' s suff
-    with Not_found -> Hashtbl.add h x s
-  and iter f = Hashtbl.iter f h
+    try let s',suff' = Hashtbl.find h x in warning_ml_clash x s' suff' s suff
+    with Not_found -> Hashtbl.add h x (s,suff)
+  and iter f = Hashtbl.iter (fun x (s,_) -> f x s) h
   and search x =
-    try Some (Hashtbl.find h x)
+    try Some (fst (Hashtbl.find h x))
     with Not_found -> None
   in add, iter, search
 
@@ -163,6 +150,10 @@ let warning_clash file dir =
       List.iter (fun s -> eprintf "%s, " s) dl;
       eprintf "%s and %s; used the latter)\n" d2 d1
   | _ -> assert false
+
+let warning_cannot_open_dir dir =
+  eprintf "*** Warning: cannot open %s\n" dir;
+  flush stderr
 
 let safe_assoc verbose file k =
   if verbose && List.mem_assoc k !clash_v then warning_clash file k;
@@ -427,8 +418,8 @@ let coq_dependencies () =
        printf "%s%s%s %s.v.beautified: %s.v" ename !suffixe glob ename ename;
        traite_fichier_Coq !suffixe true (name ^ ".v");
        printf "\n";
-       printf "%s.vi: %s.v" ename ename;
-       traite_fichier_Coq ".vi" true (name ^ ".v");
+       printf "%s.vio: %s.v" ename ename;
+       traite_fichier_Coq ".vio" true (name ^ ".v");
        printf "\n";
        flush stdout)
     (List.rev !vAccu)
@@ -462,42 +453,43 @@ let add_known recur phys_dir log_dir f =
         List.iter (fun f -> Hashtbl.add coqlibKnown f ()) paths
     | _ -> ()
 
-(* Visits all the directories under [dir], including [dir],
-   or just [dir] if [recur=false] *)
+(* Visits all the directories under [dir], including [dir] *)
 
-let rec add_directory recur add_file phys_dir log_dir =
-  let dirh = opendir phys_dir in
-  try
-    while true do
-      let f = readdir dirh in
-      (* we avoid all files and subdirs starting by '.' (e.g. .svn),
-         plus CVS and _darcs and any subdirs given via -exclude-dirs *)
-      if f.[0] <> '.' then
-        let phys_f = if phys_dir = "." then f else phys_dir//f in
-	match try (stat phys_f).st_kind with _ -> S_BLK with
-	  | S_DIR when recur ->
-              if List.mem f !norec_dirnames then ()
-              else
-	        if List.mem phys_f !norec_dirs then ()
-	        else
-		  add_directory recur add_file phys_f (log_dir@[f])
-	  | S_REG -> add_file phys_dir log_dir f
-	  | _ -> ()
-    done
-  with End_of_file -> closedir dirh
+let is_not_seen_directory phys_f =
+  not (List.mem phys_f !norec_dirs)
+
+let rec add_directory add_file phys_dir log_dir =
+  let f = function
+    | FileDir (phys_f,f) ->
+        if is_not_seen_directory phys_f then
+          add_directory add_file phys_f (log_dir @ [f])
+    | FileRegular f ->
+        add_file phys_dir log_dir f
+  in
+  System.check_unix_dir (fun s -> eprintf "*** Warning: %s\n" s) phys_dir;
+  if exists_dir phys_dir then
+    process_directory f phys_dir
+  else
+    warning_cannot_open_dir phys_dir
 
 (** -Q semantic: go in subdirs but only full logical paths are known. *)
 let add_dir add_file phys_dir log_dir =
-  try add_directory true (add_file false) phys_dir log_dir with Unix_error _ -> ()
+  try add_directory (add_file false) phys_dir log_dir with Unix_error _ -> ()
 
 (** -R semantic: go in subdirs and suffixes of logical paths are known. *)
 let add_rec_dir add_file phys_dir log_dir =
-  handle_unix_error (add_directory true (add_file true) phys_dir) log_dir
+  add_directory (add_file true) phys_dir log_dir
+
+(** -R semantic but only on immediate capitalized subdirs *)
+
+let add_rec_uppercase_subdirs add_file phys_dir log_dir =
+  process_subdirectories (fun phys_dir f ->
+    add_directory (add_file true) phys_dir (log_dir@[String.capitalize f]))
+    phys_dir
 
 (** -I semantic: do not go in subdirs. *)
 let add_caml_dir phys_dir =
-  handle_unix_error (add_directory true add_caml_known phys_dir) []
-
+  add_directory add_caml_known phys_dir []
 
 let rec treat_file old_dirname old_name =
   let name = Filename.basename old_name

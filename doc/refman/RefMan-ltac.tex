@@ -91,6 +91,7 @@ is understood as
 \begin{tabular}{lcl}
 {\tacexpr} & ::= &
            {\tacexpr} {\tt ;} {\tacexpr}\\
+& | & {\tt [>} \nelist{\tacexpr}{|} {\tt ]}\\
 & | & {\tacexpr} {\tt ; [} \nelist{\tacexpr}{|} {\tt ]}\\
 & | & {\tacexprpref}\\
 \\
@@ -108,6 +109,7 @@ is understood as
 {\tacexprinf} & ::= &
            {\tacexprlow} {\tt ||} {\tacexprpref}\\
 & | &      {\tacexprlow} {\tt +} {\tacexprpref}\\
+& | &      {\tt tryif} {\tacexprlow} {\tt then} {\tacexprlow} {\tt else} {\tacexprlow}\\
 & | & {\tacexprlow}\\
 \\
 {\tacexprlow} & ::= &
@@ -127,13 +129,20 @@ is understood as
 {\tt lazymatch reverse goal with} \nelist{\contextrule}{\tt |} {\tt end}\\
 & | &
 {\tt lazymatch} {\tacexpr} {\tt with} \nelist{\matchrule}{\tt |} {\tt end}\\
+& | &
+{\tt multimatch goal with} \nelist{\contextrule}{\tt |} {\tt end}\\
+& | &
+{\tt multimatch reverse goal with} \nelist{\contextrule}{\tt |} {\tt end}\\
+& | &
+{\tt multimatch} {\tacexpr} {\tt with} \nelist{\matchrule}{\tt |} {\tt end}\\
 & | & {\tt abstract} {\atom}\\
 & | & {\tt abstract} {\atom} {\tt using} {\ident} \\
 & | & {\tt first [} \nelist{\tacexpr}{\tt |} {\tt ]}\\
 & | & {\tt solve [} \nelist{\tacexpr}{\tt |} {\tt ]}\\
 & | & {\tt idtac} \sequence{\messagetoken}{}\\
 & | & {\tt fail} \zeroone{\naturalnumber} \sequence{\messagetoken}{}\\
-& | & {\tt fresh} ~|~ {\tt fresh} {\qstring}\\
+& | & {\tt gfail} \zeroone{\naturalnumber} \sequence{\messagetoken}{}\\
+& | & {\tt fresh} ~|~ {\tt fresh} {\qstring}|~ {\tt fresh} {\qualid}\\
 & | & {\tt context} {\ident} {\tt [} {\term} {\tt ]}\\
 & | & {\tt eval} {\nterm{redexpr}} {\tt in} {\term}\\
 & | & {\tt type of} {\term}\\
@@ -460,6 +469,24 @@ applied. {\tacexpr}$_1$ {\tt ||} {\tacexpr}$_2$ is equivalent to {\tt
   {\tacexpr}$_2$ {\tt ]} (except that if it fails, it fails like
 $v_2$). Branching is left-associative.
 
+\subsubsection[Generalized biased branching]{Generalized biased branching\tacindex{tryif}
+\index{Tacticals!tryif@{\tt tryif}}}
+
+The tactic
+\begin{quote}
+{\tt tryif {\tacexpr}$_1$ then {\tacexpr}$_2$ else {\tacexpr}$_3$}
+\end{quote}
+is a generalization of the biased-branching tactics above. The
+expression {\tacexpr}$_1$ is evaluated to $v_1$, which is then applied
+to each subgoal independently. For each goal where $v_1$ succeeds at
+least once, {tacexpr}$_2$ is evaluated to $v_2$ which is then applied
+collectively to the generated subgoals. The $v_2$ tactic can trigger
+backtracking points in $v_1$: where $v_1$ succeeds at least once, {\tt
+  tryif {\tacexpr}$_1$ then {\tacexpr}$_2$ else {\tacexpr}$_3$} is
+equivalent to $v_1;v_2$. In each of the goals where $v_1$ does not
+succeed at least once, {\tacexpr}$_3$ is evaluated in $v_3$ which is
+is then applied to the goal.
+
 \subsubsection[Soft cut]{Soft cut\tacindex{once}\index{Tacticals!once@{\tt once}}}
 
 Another way of restricting backtracking is to restrict a tactic to a
@@ -516,12 +543,14 @@ literally. If a (term) variable is given, its contents are printed.
 
 
 \subsubsection[Failing]{Failing\tacindex{fail}
-\index{Tacticals!fail@{\tt fail}}}
+\index{Tacticals!fail@{\tt fail}}
+\tacindex{gfail}\index{Tacticals!gfail@{\tt gfail}}}
 
 The tactic {\tt fail} is the always-failing tactic: it does not solve
 any goal. It is useful for defining other tacticals since it can be
 caught by {\tt try}, {\tt repeat}, {\tt match goal}, or the branching
-tacticals.
+tacticals. The {\tt fail} tactic will, however, succeed if all the
+goals have already been solved.
 
 \begin{Variants}
 \item {\tt fail $n$}\\ The number $n$ is the failure level. If no
@@ -539,6 +568,18 @@ The given tokens are used for printing the failure message.
 
 \item {\tt fail $n$ \nelist{\messagetoken}{}}\\
 This is a combination of the previous variants.
+
+\item {\tt gfail}\\
+This variant fails even if there are no goals left.
+
+\item {\tt gfail \nelist{\messagetoken}{}}\\
+{\tt gfail $n$ \nelist{\messagetoken}{}}\\
+These variants fail with an error message or an error level even if
+there are no goals left. Be careful however if Coq terms have to be
+printed as part of the failure: term construction always forces the
+tactic into the goals, meaning that if there are no goals when it is
+evaluated, a tactic call like {\tt let x:=H in fail 0 x} will succeed.
+
 \end{Variants}
 
 \ErrMsg \errindex{Tactic Failure {\it message} (level $n$)}.
@@ -579,10 +620,10 @@ runs is displayed. Time is in seconds and is machine-dependent. The
 {\qstring} argument is optional. When provided, it is used to identify
 this particular occurrence of {\tt time}.
 
-\subsubsection[Local definitions]{Local definitions\index{Ltac!let}
-\index{Ltac!let rec}
-\index{let!in Ltac}
-\index{let rec!in Ltac}}
+\subsubsection[Local definitions]{Local definitions\index{Ltac!let@\texttt{let}}
+\index{Ltac!let rec@\texttt{let rec}}
+\index{let@\texttt{let}!in Ltac}
+\index{let rec@\texttt{let rec}!in Ltac}}
 
 Local definitions can be done as follows:
 \begin{quote}
@@ -618,8 +659,8 @@ definition expecting at least $n$ arguments.  The expressions
 
 %\subsection{Application of tactic values}
 
-\subsubsection[Function construction]{Function construction\index{fun!in Ltac}
-\index{Ltac!fun}}
+\subsubsection[Function construction]{Function construction\index{fun@\texttt{fun}!in Ltac}
+\index{Ltac!fun@\texttt{fun}}}
 
 A parameterized tactic can be built anonymously (without resorting to
 local definitions) with:
@@ -629,8 +670,8 @@ local definitions) with:
 Indeed, local definitions of functions are a syntactic sugar for
 binding a {\tt fun} tactic to an identifier.
 
-\subsubsection[Pattern matching on terms]{Pattern matching on terms\index{Ltac!match}
-\index{match!in Ltac}}
+\subsubsection[Pattern matching on terms]{Pattern matching on terms\index{Ltac!match@\texttt{match}}
+\index{match@\texttt{match}!in Ltac}}
 
 We can carry out pattern matching on terms with:
 \begin{quote}
@@ -670,6 +711,10 @@ pattern {\_} matches any term and shunts all remaining patterns if
 any. If all clauses fail (in particular, there is no pattern {\_})
 then a no-matching-clause error is raised.
 
+Failures in subsequent tactics do not cause backtracking to select new
+branches or inside the right-hand side of the selected branch even if
+it has backtracking points.
+
 \begin{ErrMsgs}
 
 \item \errindex{No matching clauses for match}
@@ -684,12 +729,27 @@ then a no-matching-clause error is raised.
 
 \begin{Variants}
 
-\item \index{lazymatch!in Ltac}
-\index{Ltac!lazymatch}
-Using {\tt lazymatch} instead of {\tt match} disables the backtracking
-mechanism.
+\item \index{multimatch@\texttt{multimatch}!in Ltac}
+\index{Ltac!multimatch@\texttt{multimatch}}
+Using {\tt multimatch} instead of {\tt match} will allow subsequent
+tactics to backtrack into a right-hand side tactic which has
+backtracking points left and trigger the selection of a new matching
+branch when all the backtracking points of the right-hand side have
+been consumed.
 
-\item \index{context!in pattern}
+The syntax {\tt match \ldots} is, in fact, a shorthand for
+{\tt once multimatch \ldots}.
+
+\item \index{lazymatch@\texttt{lazymatch}!in Ltac}
+\index{Ltac!lazymatch@\texttt{lazymatch}}
+Using {\tt lazymatch} instead of {\tt match} will perform the same
+pattern matching procedure but will commit to the first matching
+branch rather than trying a new matching if the right-hand side
+fails. If the right-hand side of the selected branch is a tactic with
+backtracking points, then subsequent failures cause this tactic to
+backtrack.
+
+\item \index{context@\texttt{context}!in pattern}
 There is a special form of patterns to match a subterm against the
 pattern:
 \begin{quote}
@@ -718,9 +778,8 @@ Goal True.
 f (3+4).
 \end{coq_example}
 
-\item \index{appcontext!in pattern}
-  \comindex{Set Tactic Compat Context}
-  \comindex{Unset Tactic Compat Context}
+\item \index{appcontext@\texttt{appcontext}!in pattern}
+  \optindex{Tactic Compat Context}
 For historical reasons, {\tt context} used to consider $n$-ary applications
 such as {\tt (f 1 2)} as a whole, and not as a sequence of unary
 applications {\tt ((f 1) 2)}. Hence {\tt context [f ?x]} would fail
@@ -736,10 +795,10 @@ behavior can be retrieved with the {\tt Tactic Compat Context} flag.
 
 \end{Variants}
 
-\subsubsection[Pattern matching on goals]{Pattern matching on goals\index{Ltac!match goal}
-\index{Ltac!match reverse goal}
-\index{match goal!in Ltac}
-\index{match reverse goal!in Ltac}}
+\subsubsection[Pattern matching on goals]{Pattern matching on goals\index{Ltac!match goal@\texttt{match goal}}
+\index{Ltac!match reverse goal@\texttt{match reverse goal}}
+\index{match goal@\texttt{match goal}!in Ltac}
+\index{match reverse goal@\texttt{match reverse goal}!in Ltac}}
 
 We can make pattern matching on goals using the following expression:
 \begin{quote}
@@ -770,8 +829,12 @@ no other combination of hypotheses then the second proof context
 pattern is tried and so on. If the next to last proof context pattern
 fails then {\tacexpr}$_{n+1}$ is evaluated to $v_{n+1}$ and $v_{n+1}$
 is applied. Note also that matching against subterms (using the {\tt
-context} {\ident} {\tt [} {\cpattern} {\tt ]}) is available and may
-itself induce extra backtrackings.
+context} {\ident} {\tt [} {\cpattern} {\tt ]}) is available and is
+also subject to yielding several matchings.
+
+Failures in subsequent tactics do not cause backtracking to select new
+branches or combinations of hypotheses, or inside the right-hand side
+of the selected branch even if it has backtracking points.
 
 \ErrMsg \errindex{No matching clauses for match goal}
 
@@ -789,14 +852,33 @@ first), but it possible to reverse this order (older first) with
 the {\tt match reverse goal with} variant.
 
 \variant
-\index{lazymatch goal!in Ltac}
-\index{Ltac!lazymatch goal}
-\index{lazymatch reverse goal!in Ltac}
-\index{Ltac!lazymatch reverse goal}
-Using {\tt lazymatch} instead of {\tt match} disables the backtracking
-mechanism.
 
-\subsubsection[Filling a term context]{Filling a term context\index{context!in expression}}
+\index{multimatch goal@\texttt{multimatch goal}!in Ltac}
+\index{Ltac!multimatch goal@\texttt{multimatch goal}}
+\index{multimatch reverse goal@\texttt{multimatch reverse goal}!in Ltac}
+\index{Ltac!multimatch reverse goal@\texttt{multimatch reverse goal}}
+
+Using {\tt multimatch} instead of {\tt match} will allow subsequent
+tactics to backtrack into a right-hand side tactic which has
+backtracking points left and trigger the selection of a new matching
+branch or combination of hypotheses when all the backtracking points
+of the right-hand side have been consumed.
+
+The syntax {\tt match [reverse] goal \ldots} is, in fact, a shorthand for
+{\tt once multimatch [reverse] goal \ldots}.
+
+\index{lazymatch goal@\texttt{lazymatch goal}!in Ltac}
+\index{Ltac!lazymatch goal@\texttt{lazymatch goal}}
+\index{lazymatch reverse goal@\texttt{lazymatch reverse goal}!in Ltac}
+\index{Ltac!lazymatch reverse goal@\texttt{lazymatch reverse goal}}
+Using {\tt lazymatch} instead of {\tt match} will perform the same
+pattern matching procedure but will commit to the first matching
+branch with the first matching combination of hypotheses rather than
+trying a new matching if the right-hand side fails. If the right-hand
+side of the selected branch is a tactic with backtracking points, then
+subsequent failures cause this tactic to backtrack.
+
+\subsubsection[Filling a term context]{Filling a term context\index{context@\texttt{context}!in expression}}
 
 The following expression is not a tactic in the sense that it does not
 produce subgoals but generates a term to be used in tactic
@@ -812,8 +894,8 @@ replaces the hole of the value of {\ident} by the value of
 \ErrMsg \errindex{not a context variable}
 
 
-\subsubsection[Generating fresh hypothesis names]{Generating fresh hypothesis names\index{Ltac!fresh}
-\index{fresh!in Ltac}}
+\subsubsection[Generating fresh hypothesis names]{Generating fresh hypothesis names\index{Ltac!fresh@\texttt{fresh}}
+\index{fresh@\texttt{fresh}!in Ltac}}
 
 Tactics sometimes have to generate new names for hypothesis. Letting
 the system decide a name with the {\tt intro} tactic is not so good
@@ -824,14 +906,14 @@ The following expression returns an identifier:
 \end{quote}
 It evaluates to an identifier unbound in the goal. This fresh
 identifier is obtained by concatenating the value of the
-\textrm{\textsl{component}}'s (each of them is, either an {\ident} which
-has to refer to a name, or directly a name denoted by a
+\textrm{\textsl{component}}'s (each of them is, either an {\qualid} which
+has to refer to a (unqualified) name, or directly a name denoted by a
 {\qstring}). If the resulting name is already used, it is padded
 with a number so that it becomes fresh. If no component is
 given, the name is a fresh derivative of the name {\tt H}.
 
-\subsubsection[Computing in a constr]{Computing in a constr\index{Ltac!eval}
-\index{eval!in Ltac}}
+\subsubsection[Computing in a constr]{Computing in a constr\index{Ltac!eval@\texttt{eval}}
+\index{eval@\texttt{eval}!in Ltac}}
 
 Evaluation of a term can be performed with:
 \begin{quote}
@@ -843,8 +925,8 @@ hnf}, {\tt compute}, {\tt simpl}, {\tt cbv}, {\tt lazy}, {\tt unfold},
 
 \subsubsection{Recovering the type of a term}
 %\tacindex{type of}
-\index{Ltac!type of}
-\index{type of!in Ltac}
+\index{Ltac!type of@\texttt{type of}}
+\index{type of@\texttt{type of}!in Ltac}
 
 The following returns the type of {\term}:
 
@@ -852,7 +934,10 @@ The following returns the type of {\term}:
 {\tt type of} {\term}
 \end{quote}
 
-\subsubsection[Manipulating untyped terms]{Manipulating untyped terms\index{Ltac!uconstr}\index{uconstr!in Ltac}\index{Ltac!type\_term}\index{type\_term!in Ltac}}
+\subsubsection[Manipulating untyped terms]{Manipulating untyped terms\index{Ltac!uconstr@\texttt{uconstr}}
+\index{uconstr@\texttt{uconstr}!in Ltac}
+\index{Ltac!type\_term@\texttt{type\_term}}
+\index{type\_term@\texttt{type\_term}!in Ltac}}
 
 The terms built in Ltac are well-typed by default. It may not be
 appropriate for building large terms using a recursive Ltac function:
@@ -880,7 +965,7 @@ untyped term is type checked against the conclusion of the goal, and
 the holes which are not solved by the typing procedure are turned into
 new subgoals.
 
-\subsubsection[Counting the goals]{Counting the goals\index{Ltac!numgoals}\index{numgoals!in Ltac}}
+\subsubsection[Counting the goals]{Counting the goals\index{Ltac!numgoals@\texttt{numgoals}}\index{numgoals@\texttt{numgoals}!in Ltac}}
 
 The number of goals under focus can be recovered using the {\tt
   numgoals} function. Combined with the {\tt guard} command below, it
@@ -896,7 +981,7 @@ split;[|split].
 all:pr_numgoals.
 \end{coq_example}
 
-\subsubsection[Testing boolean expressions]{Testing boolean expressions\index{Ltac!guard}\index{guard!in Ltac}}
+\subsubsection[Testing boolean expressions]{Testing boolean expressions\index{Ltac!guard@\texttt{guard}}\index{guard@\texttt{guard}!in Ltac}}
 
 The {\tt guard} tactic tests a boolean expression, and fails if the expression evaluates to false. If the expression evaluates to true, it succeeds without affecting the proof.
 
@@ -924,13 +1009,19 @@ Fail all:let n:= numgoals in guard n=2.
 Reset Initial.
 \end{coq_eval}
 
-\subsubsection[Proving a subgoal as a separate lemma]{Proving a subgoal as a separate lemma\tacindex{abstract}
+\subsubsection[Proving a subgoal as a separate lemma]{Proving a subgoal as a separate lemma\tacindex{abstract}\comindex{Qed exporting}
 \index{Tacticals!abstract@{\tt abstract}}}
 
 From the outside ``\texttt{abstract \tacexpr}'' is the same as
 {\tt solve \tacexpr}. Internally it saves an auxiliary lemma called 
 {\ident}\texttt{\_subproof}\textit{n} where {\ident} is the name of the
 current goal and \textit{n} is chosen so that this is a fresh name.
+Such auxiliary lemma is inlined in the final proof term
+unless the proof is ended with ``\texttt{Qed exporting}''.  In such
+case the lemma is preserved.  The syntax
+``\texttt{Qed exporting }\ident$_1$\texttt{, ..., }\ident$_n$''
+is also supported.  In such case the system checks that the names given by the
+user actually exist when the proof is ended.
 
 This tactical is useful with tactics such as \texttt{omega} or
 \texttt{discriminate} that generate huge proof terms. With that tool
@@ -1002,9 +1093,7 @@ Defined {\ltac} functions can be displayed using the command
 
 \section{Debugging {\ltac} tactics}
 
-\subsection[Info trace]{Info trace\comindex{Info}\comindex{Set Info Level}
-\comindex{Unset Info Level}
-\comindex{Test Info Level}}
+\subsection[Info trace]{Info trace\comindex{Info}\optindex{Info Level}}
 
 It is possible to print the trace of the path eventually taken by an {\ltac} script. That is, the list of executed tactics, discarding all the branches which have failed. To that end the {\tt Info} command can be used with the following syntax.
 
@@ -1050,9 +1139,7 @@ This will automatically print the same trace as {\tt Info \num} at each tactic c
 
 The current value for the {\tt Info Level} option can be checked using the {\tt Test Info Level} command.
 
-\subsection[Interactive debugger]{Interactive debugger\comindex{Set Ltac Debug}
-\comindex{Unset Ltac Debug}
-\comindex{Test Ltac Debug}}
+\subsection[Interactive debugger]{Interactive debugger\optindex{Ltac Debug}}
 
 The {\ltac} interpreter comes with a step-by-step debugger. The
 debugger can be activated using the command

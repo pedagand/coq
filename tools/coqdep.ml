@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -9,6 +9,7 @@
 open Printf
 open Coqdep_lexer
 open Coqdep_common
+open System
 
 (** The basic parts of coqdep (i.e. the parts used by [coqdep -boot])
     are now in [Coqdep_common]. The code that remains here concerns
@@ -461,7 +462,7 @@ let rec parse = function
   | "-R" :: ([] | [_]) -> usage ()
   | "-dumpgraph" :: f :: ll -> option_dump := Some (false, f); parse ll
   | "-dumpgraphbox" :: f :: ll -> option_dump := Some (true, f); parse ll
-  | "-exclude-dir" :: r :: ll -> norec_dirnames := r::!norec_dirnames; parse ll
+  | "-exclude-dir" :: r :: ll -> System.exclude_directory r; parse ll
   | "-exclude-dir" :: [] -> usage ()
   | "-coqlib" :: r :: ll -> Flags.coqlib_spec := true; Flags.coqlib := r; parse ll
   | "-coqlib" :: [] -> usage ()
@@ -482,6 +483,7 @@ let coqdep () =
   if !option_boot then begin
     add_rec_dir add_known "theories" ["Coq"];
     add_rec_dir add_known "plugins" ["Coq"];
+    add_caml_dir "tactics";
     add_rec_dir (fun _ -> add_caml_known) "theories" ["Coq"];
     add_rec_dir (fun _ -> add_caml_known) "plugins" ["Coq"];
   end else begin

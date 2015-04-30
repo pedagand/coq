@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -27,9 +27,8 @@ let subst_quantified_hypothesis _ x = x
 
 let subst_declared_or_quantified_hypothesis _ x = x
 
-let subst_glob_constr_and_expr subst (c,e) =
-  assert (Option.is_empty e); (* e<>None only for toplevel tactics *)
-  (Detyping.subst_glob_constr subst c,None)
+let subst_glob_constr_and_expr subst (c, e) =
+  (Detyping.subst_glob_constr subst c, e)
 
 let subst_glob_constr = subst_glob_constr_and_expr (* shortening *)
 
@@ -100,19 +99,10 @@ let subst_evaluable subst =
   let subst_eval_ref = subst_evaluable_reference subst in
     subst_or_var (subst_and_short_name subst_eval_ref)
 
-let subst_unfold subst (l,e) =
-  (l,subst_evaluable subst e)
-
-let subst_flag subst red =
-  { red with rConst = List.map (subst_evaluable subst) red.rConst }
-
 let subst_constr_with_occurrences subst (l,c) = (l,subst_glob_constr subst c)
 
 let subst_glob_constr_or_pattern subst (c,p) =
   (subst_glob_constr subst c,subst_pattern subst p)
-
-let subst_pattern_with_occurrences subst (l,p) =
-  (l,subst_glob_constr_or_pattern subst p)
 
 let subst_redexp subst =
   Miscops.map_red_expr_gen

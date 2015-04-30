@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2014     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -15,7 +15,6 @@ open Bigint
 open Decl_kinds
 open Extend
 open Libnames
-open Flags
 
 let unlock loc =
   let start, stop = Loc.unloc loc in
@@ -118,8 +117,8 @@ let xmlReference ref =
 let xmlRequire loc ?(attr=[]) xml = xmlWithLoc loc "require" attr xml
 let xmlImport loc ?(attr=[]) xml = xmlWithLoc loc "import" attr xml
 
-let xmlAddLoaPath loc ?(attr=[]) xml = xmlWithLoc loc "addloadpath" attr xml
-let xmlRemoveLoaPath loc ?(attr=[]) = xmlWithLoc loc "removeloadpath" attr
+let xmlAddLoadPath loc ?(attr=[]) xml = xmlWithLoc loc "addloadpath" attr xml
+let xmlRemoveLoadPath loc ?(attr=[]) = xmlWithLoc loc "removeloadpath" attr
 let xmlAddMLPath loc ?(attr=[]) = xmlWithLoc loc "addmlpath" attr
 
 let xmlExtend loc xml = xmlWithLoc loc "extend" [] xml
@@ -618,14 +617,17 @@ let rec tmpp v loc =
   | VernacBeginSection (_, id) -> xmlBeginSection loc (Id.to_string id)
   | VernacEndSegment (_, id) -> xmlEndSegment loc (Id.to_string id)
   | VernacNameSectionHypSet _ as x -> xmlTODO loc x
-  | VernacRequire (None,l) ->
-      xmlRequire loc (List.map (fun ref ->
-        xmlReference ref) l)
-  | VernacRequire (Some true,l) ->
-      xmlRequire loc ~attr:["export","true"] (List.map (fun ref ->
-        xmlReference ref) l)
-  | VernacRequire (Some false,l) ->
-      xmlRequire loc ~attr:["import","true"] (List.map (fun ref ->
+  | VernacRequire (from, import, l) ->
+      let import = match import with
+      | None -> []
+      | Some true -> ["export","true"]
+      | Some false -> ["import","true"]
+      in
+      let from = match from with
+      | None -> []
+      | Some r -> ["from", Libnames.string_of_reference r]
+      in
+      xmlRequire loc ~attr:(from @ import) (List.map (fun ref ->
         xmlReference ref) l)
   | VernacImport (true,l) ->
       xmlImport loc ~attr:["export","true"] (List.map (fun ref ->
@@ -665,12 +667,11 @@ let rec tmpp v loc =
 
   (* Auxiliary file and library management *)
   | VernacAddLoadPath (recf,name,None) ->
-      xmlAddLoaPath loc ~attr:["rec",string_of_bool recf;"path",name] []
+      xmlAddLoadPath loc ~attr:["rec",string_of_bool recf;"path",name] []
   | VernacAddLoadPath (recf,name,Some dp) ->
-      xmlAddLoaPath loc ~attr:["rec",string_of_bool recf;"path",name]
+      xmlAddLoadPath loc ~attr:["rec",string_of_bool recf;"path",name]
         [PCData (Names.DirPath.to_string dp)]
-                 
-  | VernacRemoveLoadPath name -> xmlRemoveLoaPath loc ~attr:["path",name] []
+  | VernacRemoveLoadPath name -> xmlRemoveLoadPath loc ~attr:["path",name] []
   | VernacAddMLPath (recf,name) ->
       xmlAddMLPath loc ~attr:["rec",string_of_bool recf;"path",name] []
   | VernacDeclareMLModule sl -> xmlDeclareMLModule loc sl

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2014     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -60,6 +60,8 @@ module MakeQueue(T : Task) : sig
   val cancel_worker : queue -> WorkerPool.worker_id -> unit
 
   val set_order : queue -> (T.task -> T.task -> int) -> unit
+
+  val broadcast : queue -> unit
 
   (* Take a snapshot (non destructive but waits until all workers are
    * enqueued) *)

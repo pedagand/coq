@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -13,7 +13,7 @@
 To ensure this file is up-to-date, 'make' now compares the md5 of cic.mli
 with a copy we maintain here:
 
-MD5 ed14962eac3aa2feba45a572f72b9531 checker/cic.mli
+MD5 0a174243f8b06535c9eecbbe8d339fe1 checker/cic.mli
 
 *)
 
@@ -270,7 +270,7 @@ let v_ind_pack = v_tuple "mutual_inductive_body"
 let v_with =
   Sum ("with_declaration_body",0,
        [|[|List v_id;v_mp|];
-         [|List v_id;v_constr|]|])
+         [|List v_id;v_tuple "with_def" [|v_constr;v_context|]|]|])
 
 let rec v_mae =
   Sum ("module_alg_expr",0,
@@ -296,15 +296,16 @@ and v_mexpr =
   [|[|v_mae|];                     (* NoFunctor *)
     [|v_uid;v_modtype;v_mexpr|]|]) (* MoreFunctor *)
 and v_impl =
-  Sum ("module_impl",2,
+  Sum ("module_impl",2, (* Abstract, FullStruct *)
   [|[|v_mexpr|];  (* Algebraic *)
     [|v_sign|]|])  (* Struct *)
+and v_noimpl = v_enum "no_impl" 1 (* Abstract is mandatory for mtb *)
 and v_module =
   Tuple ("module_body",
          [|v_mp;v_impl;v_sign;Opt v_mexpr;v_cstrs;v_resolver;Any|])
 and v_modtype =
   Tuple ("module_type_body",
-         [|v_mp;v_sign;Opt v_mexpr;v_cstrs;v_resolver|])
+         [|v_mp;v_noimpl;v_sign;Opt v_mexpr;v_cstrs;v_resolver;Any|])
 
 (** kernel/safe_typing *)
 
@@ -320,6 +321,33 @@ let v_libobj = Tuple ("libobj", [|v_id;v_obj|])
 let v_libobjs = List v_libobj
 let v_libraryobjs = Tuple ("library_objects",[|v_libobjs;v_libobjs|])
 
+(** STM objects *)
+
+let v_frozen = Tuple ("frozen", [|List (v_pair Int Dyn); Opt Dyn|])
+let v_states = v_pair Any v_frozen
+let v_state = Tuple ("state", [|v_states; Any; v_bool|])
+
+let v_vcs =
+  let data = Opt Any in
+  let vcs =
+    Tuple ("vcs",
+      [|Any; Any;
+        Tuple ("dag",
+          [|Any; Any; v_map Any (Tuple ("state_info",
+            [|Any; Any; Opt v_state; v_pair data Any|]))
+          |])
+      |])
+  in
+  let () = Obj.set_field (Obj.magic data) 0 (Obj.magic vcs) in
+  vcs
+
+let v_uuid = Any
+let v_request id doc =
+  Tuple ("request", [|Any; Any; doc; Any; id; String|])
+let v_tasks = List (v_pair (v_request v_uuid v_vcs) v_bool)
+let v_counters = Any
+let v_stm_seg = v_pair v_tasks v_counters
+
 (** Toplevel structures in a vo (see Cic.mli) *)
 
 let v_lib =
@@ -331,19 +359,19 @@ let v_univopaques =
 
 (** Registering dynamic values *)
 
-module StringOrd =
+module IntOrd =
 struct
-  type t = string
+  type t = int
   let compare (x : t) (y : t) = compare x y
 end
 
-module StringMap = Map.Make(StringOrd)
+module IntMap = Map.Make(IntOrd)
 
-let dyn_table : value StringMap.t ref = ref StringMap.empty
+let dyn_table : value IntMap.t ref = ref IntMap.empty
 
 let register_dyn name t =
-  dyn_table := StringMap.add name t !dyn_table
+  dyn_table := IntMap.add name t !dyn_table
 
 let find_dyn name =
-  try StringMap.find name !dyn_table
+  try IntMap.find name !dyn_table
   with Not_found -> Any

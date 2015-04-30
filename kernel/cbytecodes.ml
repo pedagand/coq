@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -24,10 +24,13 @@ let fix_tag = 3
 let switch_tag = 4
 let cofix_tag = 5
 let cofix_evaluated_tag = 6
+(* It could be greate if OCaml export this value,
+   So fixme if this occur in a new version of OCaml *)
+let last_variant_tag = 245 
 
 type structured_constant =
   | Const_sorts of sorts
-  | Const_ind of inductive
+  | Const_ind of pinductive
   | Const_b0 of tag
   | Const_bn of tag * structured_constant array
 
@@ -67,7 +70,7 @@ type instruction =
                    (* nb fv, init, lbl types, lbl bodies *)
   | Kclosurecofix of int * int * Label.t array * Label.t array
                    (* nb fv, init, lbl types, lbl bodies *)
-  | Kgetglobal of constant
+  | Kgetglobal of pconstant
   | Kconst of structured_constant
   | Kmakeblock of int * tag             (* size, tag *)
   | Kmakeprod
@@ -185,7 +188,7 @@ let rec instruction ppf = function
       Array.iter (fun lbl -> fprintf ppf " %i" lbl) lblt;
       print_string " bodies = ";
       Array.iter (fun lbl -> fprintf ppf " %i" lbl) lblb;
-  | Kgetglobal id -> fprintf ppf "\tgetglobal %s" (Names.string_of_con id)
+  | Kgetglobal (id,u) -> fprintf ppf "\tgetglobal %s" (Names.string_of_con id)
   | Kconst cst ->
       fprintf ppf "\tconst"
   | Kmakeblock(n, m) ->

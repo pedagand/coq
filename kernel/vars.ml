@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -336,3 +336,6 @@ let subst_instance_constr subst c =
 let subst_instance_context s ctx = 
   if Univ.Instance.is_empty s then ctx
   else map_rel_context (fun x -> subst_instance_constr s x) ctx
+
+type id_key = pconstant tableKey
+let eq_id_key x y = Names.eq_table_key (Univ.eq_puniverses Constant.equal) x y

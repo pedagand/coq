@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -109,7 +109,7 @@ let print_impargs_list prefix l =
 	 [(if ismt prefix then str "When" else prefix ++ str ", when") ++
 	   str " applied to " ++
 	   (if Int.equal n1 n2 then int_or_no n2 else
-	    if Int.equal n1 0 then str "less than " ++ int n2
+	    if Int.equal n1 0 then str "no more than " ++ int n2
 	    else int n1 ++ str " to " ++ int_or_no n2) ++
 	    str (String.plural n2 " argument") ++ str ":";
           v 0 (prlist_with_sep cut (fun x -> x)
@@ -197,11 +197,13 @@ let print_opacity ref =
 let print_polymorphism ref =
   let poly = Global.is_polymorphic ref in
   let template_poly = Global.is_template_polymorphic ref in
-    pr_global ref ++ str " is " ++ str 
+  if Flags.is_universe_polymorphism () || poly || template_poly then
+    [ pr_global ref ++ str " is " ++ str
       (if poly then "universe polymorphic"
        else if template_poly then
 	 "template universe polymorphic"
-       else "not universe polymorphic")
+       else "not universe polymorphic") ]
+  else []
 
 let print_primitive_record mipv = function
   | Some (Some (_, ps,_)) ->
@@ -214,9 +216,8 @@ let print_primitive ref =
     let mib,_ = Global.lookup_inductive ind in
       print_primitive_record mib.mind_packets mib.mind_record
   | _ -> []
-    
+
 let print_name_infos ref =
-  let poly = print_polymorphism ref in
   let impls = implicits_of_global ref in
   let scopes = Notation.find_arguments_scope ref in
   let renames =
@@ -228,7 +229,8 @@ let print_name_infos ref =
        print_ref true ref; blankline]
     else
       [] in
-  poly :: print_primitive ref @
+  print_polymorphism ref @
+  print_primitive ref @
   type_info_for_implicit @
   print_renames_list (mt()) renames @
   print_impargs_list (mt()) impls @
@@ -472,7 +474,9 @@ let print_constant with_values sep sp =
   let val_0 = Global.body_of_constant_body cb in
   let typ = Declareops.type_of_constant cb in
   let typ = ungeneralized_type_of_constant_type typ in
-  let univs = Univ.instantiate_univ_context (Global.universes_of_constant_body cb) in
+  let univs = Univ.instantiate_univ_context 
+    (Global.universes_of_constant_body cb)
+  in
   hov 0 (pr_polymorphic cb.const_polymorphic ++
     match val_0 with
     | None ->
@@ -720,8 +724,8 @@ let print_opaque_name qid =
 	  error "Not a defined constant."
     | IndRef (sp,_) ->
         print_inductive sp
-    | ConstructRef cstr ->
-	let ty = Inductiveops.type_of_constructor env (cstr,Univ.Instance.empty) in
+    | ConstructRef cstr as gr ->
+	let ty = Universes.unsafe_type_of_global gr in
 	print_typed_value (mkConstruct cstr, ty)
     | VarRef id ->
         let (_,c,ty) = lookup_named id env in

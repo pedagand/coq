@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -285,11 +285,13 @@ let inductive_template evdref env tmloc ind =
    applist (mkIndU indu,List.rev evarl)
 
 let try_find_ind env sigma typ realnames =
-  let (IndType(_,realargs) as ind) = find_rectype env sigma typ in
+  let (IndType(indf,realargs) as ind) = find_rectype env sigma typ in
   let names =
     match realnames with
       | Some names -> names
-      | None -> List.make (List.length realargs) Anonymous in
+      | None ->
+          let ind = fst (fst (dest_ind_family indf)) in
+          List.make (inductive_nrealdecls ind) Anonymous in
   IsInd (typ,ind,names)
 
 let inh_coerce_to_ind evdref env loc ty tyi =
@@ -730,7 +732,17 @@ let set_declaration_name x (_,c,t) = (x,c,t)
 
 let recover_initial_subpattern_names = List.map2 set_declaration_name
 
-let recover_alias_names get_name = List.map2 (fun x (_,c,t) ->(get_name x,c,t))
+let recover_and_adjust_alias_names names sign =
+  let rec aux = function
+  | [],[] ->
+      []
+  | x::names, (_,None,t)::sign ->
+      (x,(alias_of_pat x,None,t)) :: aux (names,sign)
+  | names, (na,(Some _ as c),t)::sign ->
+      (PatVar (Loc.ghost,na),(na,c,t)) :: aux (names,sign)
+  | _ -> assert false
+  in
+  List.split (aux (names,sign))
 
 let push_rels_eqn sign eqn =
   {eqn with
@@ -1644,7 +1656,7 @@ let abstract_tycon loc env evdref subst tycon extenv t =
   in
   aux (0,extenv,subst0) t0
 
-let build_tycon loc env tycon_env subst tycon extenv evdref t =
+let build_tycon loc env tycon_env s subst tycon extenv evdref t =
   let t,tt = match t with
     | None ->
 	(* This is the situation we are building a return predicate and
@@ -1659,6 +1671,8 @@ let build_tycon loc env tycon_env subst tycon extenv evdref t =
         let evd,tt = Typing.e_type_of extenv !evdref t in
         evdref := evd;
         (t,tt) in
+  let b = e_cumul env evdref tt (mkSort s) (* side effect *) in
+  if not b then anomaly (Pp.str "Build_tycon: should be a type");
   { uj_val = t; uj_type = tt }
 
 (* For a multiple pattern-matching problem Xi on t1..tn with return
@@ -1693,11 +1707,12 @@ let build_inversion_problem loc env sigma tms t =
 	let pat,acc = make_patvar t acc in
 	let indf' = lift_inductive_family n indf in
 	let sign = make_arity_signature env true indf' in
-	let sign = recover_alias_names alias_of_pat (pat :: List.rev patl) sign in
-	let p = List.length realargs in
+        let patl = pat :: List.rev patl in
+	let patl,sign = recover_and_adjust_alias_names patl sign in
+	let p = List.length patl in
 	let env' = push_rel_context sign env in
-	let patl',acc_sign,acc = aux (n+p+1) env' (sign@acc_sign) tms acc in
-	patl@pat::patl',acc_sign,acc
+	let patl',acc_sign,acc = aux (n+p) env' (sign@acc_sign) tms acc in
+	List.rev_append patl patl',acc_sign,acc
     | (t, NotInd (bo,typ)) :: tms ->
       let pat,acc = make_patvar t acc in
       let d = (alias_of_pat pat,None,typ) in
@@ -1780,7 +1795,7 @@ let build_inversion_problem loc env sigma tms t =
       mat       = [eqn1;eqn2];
       caseloc   = loc;
       casestyle = RegularStyle;
-      typing_function = build_tycon loc env pb_env subst} in
+      typing_function = build_tycon loc env pb_env s subst} in
   let pred = (compile pb).uj_val in
   (!evdref,pred)
 

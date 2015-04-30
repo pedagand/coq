@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -129,7 +129,7 @@ let subst_const_body sub cb =
         const_type = type';
         const_proj = proj';
         const_body_code =
-          Cemitcodes.subst_to_patch_subst sub cb.const_body_code;
+          Option.map (Cemitcodes.subst_to_patch_subst sub) cb.const_body_code;
         const_polymorphic = cb.const_polymorphic;
         const_universes = cb.const_universes;
         const_inline_code = cb.const_inline_code }
@@ -259,6 +259,16 @@ let subst_mind_body sub mib =
     mind_polymorphic = mib.mind_polymorphic;
     mind_universes = mib.mind_universes;
     mind_private = mib.mind_private }
+
+let inductive_instance mib =
+  if mib.mind_polymorphic then
+    Univ.UContext.instance mib.mind_universes
+  else Univ.Instance.empty
+
+let inductive_context mib =
+  if mib.mind_polymorphic then 
+    Univ.instantiate_univ_context mib.mind_universes 
+  else Univ.UContext.empty
 
 (** {6 Hash-consing of inductive declarations } *)
 

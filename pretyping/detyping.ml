@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -394,18 +394,13 @@ let detype_case computable detype detype_eqns testdep avoid data p c bl =
       let eqnl = detype_eqns constructs constagsl bl in
       GCases (dl,tag,pred,[tomatch,(alias,aliastyp)],eqnl)
 
-let detype_sort = function
+let detype_sort sigma = function
   | Prop Null -> GProp
   | Prop Pos -> GSet
   | Type u ->
     GType
       (if !print_universes
-       then 
-	  let _, map = Universes.global_universe_names () in
-	  let pr_level u = 
-	    try Nameops.pr_id (Univ.LMap.find u map) with Not_found -> Univ.Level.pr u
-	  in 
-	    [Pp.string_of_ppcmds (Univ.Universe.pr_with pr_level u)]
+       then [Pp.string_of_ppcmds (Univ.Universe.pr_with (Evd.pr_evd_level sigma) u)]
        else [])
 
 type binder_kind = BProd | BLambda | BLetIn
@@ -416,12 +411,12 @@ type binder_kind = BProd | BLambda | BLetIn
 let detype_anonymous = ref (fun loc n -> anomaly ~label:"detype" (Pp.str "index to an anonymous variable"))
 let set_detype_anonymous f = detype_anonymous := f
 
-let detype_level l =
-  GType (Some (Pp.string_of_ppcmds (Univ.Level.pr l)))
+let detype_level sigma l =
+  GType (Some (Pp.string_of_ppcmds (Evd.pr_evd_level sigma l)))
 
-let detype_instance l = 
+let detype_instance sigma l = 
   if Univ.Instance.is_empty l then None
-  else Some (List.map detype_level (Array.to_list (Univ.Instance.to_array l)))
+  else Some (List.map (detype_level sigma) (Array.to_list (Univ.Instance.to_array l)))
 
 let rec detype flags avoid env sigma t =
   match kind_of_term (collapse_appl t) with
@@ -439,7 +434,7 @@ let rec detype flags avoid env sigma t =
     | Var id ->
 	(try let _ = Global.lookup_named id in GRef (dl, VarRef id, None)
 	 with Not_found -> GVar (dl, id))
-    | Sort s -> GSort (dl,detype_sort s)
+    | Sort s -> GSort (dl,detype_sort sigma s)
     | Cast (c1,REVERTcast,c2) when not !Flags.raw_print ->
         detype flags avoid env sigma c1
     | Cast (c1,k,c2) ->
@@ -463,7 +458,7 @@ let rec detype flags avoid env sigma t =
       in
 	mkapp (detype flags avoid env sigma f)
 	  (Array.map_to_list (detype flags avoid env sigma) args)
-    | Const (sp,u) -> GRef (dl, ConstRef sp, detype_instance u)
+    | Const (sp,u) -> GRef (dl, ConstRef sp, detype_instance sigma u)
     | Proj (p,c) ->
       let noparams () = 
 	let pb = Environ.lookup_projection p (snd env) in
@@ -487,8 +482,9 @@ let rec detype flags avoid env sigma t =
 	      let pb = Environ.lookup_projection p (snd env) in
 	      let body = pb.Declarations.proj_body in
 	      let ty = Retyping.get_type_of (snd env) sigma c in
-	      let (ind, args) = Inductiveops.find_mrectype (snd env) sigma ty in
+	      let ((ind,u), args) = Inductiveops.find_mrectype (snd env) sigma ty in
 	      let body' = strip_lam_assum body in
+	      let body' = subst_instance_constr u body' in
 		substl (c :: List.rev args) body'
 	    with Retyping.RetypeError _ | Not_found -> 
 	      anomaly (str"Cannot detype an unfolded primitive projection.")
@@ -502,16 +498,17 @@ let rec detype flags avoid env sigma t =
 	  else noparams ()
 
     | Evar (evk,cl) ->
-        let bound_to_itself id c =
+        let bound_to_itself_or_letin (id,b,_) c =
+          b != None ||
 	  try let n = List.index Name.equal (Name id) (fst env) in 
-	      isRelN n c 
+	      isRelN n c
 	  with Not_found -> isVarId id c in
       let id,l =
         try
           let id = Evd.evar_ident evk sigma in
-          let l = Evd.evar_instance_array bound_to_itself (Evd.find sigma evk) cl in
-          let fvs,rels = List.fold_left (fun (fvs,rels) (_,c) -> (Id.Set.union fvs (collect_vars c), Int.Set.union rels (free_rels c))) (Id.Set.empty,Int.Set.empty) l in
-          let l = Evd.evar_instance_array (fun id c -> not !print_evar_arguments && (bound_to_itself id c && not (isRel c && Int.Set.mem (destRel c) rels || isVar c && (Id.Set.mem (destVar c) fvs)))) (Evd.find sigma evk) cl in
+          let l = Evd.evar_instance_array bound_to_itself_or_letin (Evd.find sigma evk) cl in
+          let fvs,rels = List.fold_left (fun (fvs,rels) (_,c) -> match kind_of_term c with Rel n -> (fvs,Int.Set.add n rels) | Var id -> (Id.Set.add id fvs,rels) | _ -> (fvs,rels)) (Id.Set.empty,Int.Set.empty) l in
+          let l = Evd.evar_instance_array (fun d c -> not !print_evar_arguments && (bound_to_itself_or_letin d c && not (isRel c && Int.Set.mem (destRel c) rels || isVar c && (Id.Set.mem (destVar c) fvs)))) (Evd.find sigma evk) cl in
           id,l
         with Not_found ->
           Id.of_string ("X" ^ string_of_int (Evar.repr evk)), 
@@ -520,9 +517,9 @@ let rec detype flags avoid env sigma t =
         GEvar (dl,id,
                List.map (on_snd (detype flags avoid env sigma)) l)
     | Ind (ind_sp,u) ->
-	GRef (dl, IndRef ind_sp, detype_instance u)
+	GRef (dl, IndRef ind_sp, detype_instance sigma u)
     | Construct (cstr_sp,u) ->
-	GRef (dl, ConstructRef cstr_sp, detype_instance u)
+	GRef (dl, ConstructRef cstr_sp, detype_instance sigma u)
     | Case (ci,p,c,bl) ->
 	let comp = computable p (List.length (ci.ci_pp_info.ind_tags)) in
 	detype_case comp (detype flags avoid env sigma)

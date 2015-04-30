@@ -17,7 +17,7 @@ three non-negative, period-separed integers [...]" *)
 let vo_magic = 8511
 let state_magic = 58511
 let distributed_exec = ["coqtop";"coqc";"coqchk";"coqdoc";"coqmktop";"coqworkmgr";
-"coqdoc";"coq_makefile";"coq-tex";"gallina";"coqwc";"csdpcert"]
+"coqdoc";"coq_makefile";"coq-tex";"gallina";"coqwc";"csdpcert";"coqdep"]
 
 let verbose = ref false (* for debugging this script *)
 
@@ -77,7 +77,12 @@ let read_lines_and_close fd =
 
 type err = StdErr | StdOut | DevNull
 
+let exe = ref ""  (* Will be set later on, when the suffix is known *)
+
 let run ?(fatal=true) ?(err=StdErr) prog args =
+  let prog = (* Ensure prog ends with exe *)
+    if Str.string_match (Str.regexp ("^.*" ^ !exe ^ "$")) prog 0
+    then prog else (prog ^ !exe) in
   let argv = Array.of_list (prog::args) in
   try
     let out_r,out_w = Unix.pipe () in
@@ -236,12 +241,11 @@ module Prefs = struct
   let usecamlp5 = ref true
   let camlp5dir = ref (None : string option)
   let arch = ref (None : string option)
-  let opt = ref false
   let natdynlink = ref true
   let coqide = ref (None : ide option)
   let macintegration = ref true
   let browser = ref (None : string option)
-  let withdoc = ref true
+  let withdoc = ref false
   let geoproof = ref false
   let byteonly = ref false
   let debug = ref false
@@ -283,11 +287,11 @@ let args_options = Arg.align [
   "-emacs", Arg.String (fun s ->
       printf "Warning: obsolete -emacs option\n";
       Prefs.emacslib := Some s),
-    "<dir> (Obsolete) same as -emacslib";
+    "<dir> Obsolete: same as -emacslib";
   "-coqdocdir", arg_string_option Prefs.coqdocdir,
     "<dir> Where to install Coqdoc style files";
   "-camldir", arg_string_option Prefs.camldir,
-    "<dir> Specifies the path to the OCaml library";
+    "<dir> Specifies the path to the OCaml binaries";
   "-lablgtkdir", arg_string_option Prefs.lablgtkdir,
     "<dir> Specifies the path to the Lablgtk library";
   "-usecamlp5", Arg.Set Prefs.usecamlp5,
@@ -299,8 +303,8 @@ let args_options = Arg.align [
     "<dir> Specifies where is the Camlp5 library and tells to use it";
   "-arch", arg_string_option Prefs.arch,
     "<arch> Specifies the architecture";
-  "-opt", Arg.Set Prefs.opt,
-    " Use OCaml *.opt optimized compilers";
+  "-opt", Arg.Unit (fun () -> printf "Warning: obsolete -opt option\n"),
+    " Obsolete: native OCaml executables detected automatically";
   "-natdynlink", arg_bool Prefs.natdynlink,
     "(yes|no) Use dynamic loading of native code or not";
   "-coqide", Arg.String (fun s -> Prefs.coqide := Some (get_ide s)),
@@ -355,21 +359,25 @@ type camlexec =
    mutable dep : string;
    mutable doc : string;
    mutable lex : string;
-   mutable yacc : string;
-   mutable p4 : string }
+   mutable yacc : string }
 
 (* TODO: autodetect .opt binaries ? *)
 
 let camlexec =
-  { byte = if !Prefs.opt then "ocamlc.opt" else "ocamlc";
-    opt = if !Prefs.opt then "ocamlopt.opt" else "ocamlopt";
+  { byte = "ocamlc";
+    opt = "ocamlopt";
     top = "ocaml";
     mklib = "ocamlmklib";
     dep = "ocamldep";
     doc = "ocamldoc";
     lex = "ocamllex";
-    yacc = "ocamlyacc";
-    p4 = "camlp4o" }
+    yacc = "ocamlyacc" }
+
+let reset_caml_byte c o = c.byte <- o
+let reset_caml_opt c o = c.opt <- o
+let reset_caml_doc c o = c.doc <- o
+let reset_caml_lex c o = c.lex <- o
+let reset_caml_dep c o = c.dep <- o
 
 let rebase_camlexec dir c =
   c.byte <- Filename.concat dir c.byte;
@@ -379,8 +387,7 @@ let rebase_camlexec dir c =
   c.dep <- Filename.concat dir c.dep;
   c.doc <- Filename.concat dir c.doc;
   c.lex <- Filename.concat dir c.lex;
-  c.yacc <- Filename.concat dir c.yacc;
-  c.p4 <- Filename.concat dir c.p4
+  c.yacc <- Filename.concat dir c.yacc
 
 let coq_debug_flag = if !Prefs.debug then "-g" else ""
 let coq_profile_flag = if !Prefs.profile then "-p" else ""
@@ -426,7 +433,7 @@ let arch = match !Prefs.arch with
 
 let arch_win32 = (arch = "win32")
 
-let exe = if arch_win32 then ".exe" else ""
+let exe = exe := if arch_win32 then ".exe" else ""; !exe
 let dll = if os_type_win32 then ".dll" else ".so"
 
 (** * VCS
@@ -464,7 +471,8 @@ let browser =
 
 (** * OCaml programs *)
 
-let camlbin, camlc = match !Prefs.camldir with
+let camlbin, caml_version, camllib =
+  let camlbin, camlc = match !Prefs.camldir with
   | Some dir ->
     rebase_camlexec dir camlexec;
     Filename.dirname camlexec.byte, camlexec.byte
@@ -473,13 +481,21 @@ let camlbin, camlc = match !Prefs.camldir with
     with Not_found ->
       die (sprintf "Error: cannot find '%s' in your path!\n" camlexec.byte ^
            "Please adjust your path or use the -camldir option of ./configure")
+  in
+  let camlcopt = camlc ^ ".opt" in
+  let camlc =
+    if is_executable camlcopt then begin
+      reset_caml_byte camlexec (camlexec.byte ^ ".opt");
+      camlcopt
+    end
+    else if is_executable camlc then
+      camlc
+    else
+      die ("Error: cannot find the executable '"^camlc^"'.") in
+  let caml_version, _ = run camlc ["-version"] in
+  let camllib, _ = run camlc ["-where"] in
+  camlbin, caml_version, camllib
 
-let _ =
-  if not (is_executable camlc) then
-    die ("Error: cannot find the executable '"^camlc^"'.")
-
-let caml_version, _ = run camlc ["-version"]
-let camllib, _ = run camlc ["-where"]
 let camlp4compat = "-loc loc"
 
 (** Caml version as a list of string, e.g. ["4";"00";"1"] *)
@@ -518,10 +534,15 @@ let camltag = match caml_version_list with
 
 (** * CamlpX configuration *)
 
-(** We assume that camlp(4|5) binaries are at the same place as ocaml ones
-    (this should become configurable some day). *)
+(* Convention: we use camldir as a prioritary location for camlpX, if given *)
 
-let camlp4bin = camlbin
+let which_camlpX base =
+  match !Prefs.camldir with
+  | Some dir ->
+    let file = Filename.concat dir base in
+    if is_executable file then file else which base
+  | None ->
+    which base
 
 (* TODO: camlp5dir should rather be the *binary* location, just as camldir *)
 (* TODO: remove the late attempts at finding gramlib.cma *)
@@ -545,7 +566,7 @@ let check_camlp5 testcma = match !Prefs.camlp5dir with
         camllib/"site-lib"/"camlp5"
       else ""
     in
-    (* if the two values are different than camlp5 has been relocated
+    (* if the two values are different then camlp5 has been relocated
      * and will not be able to find its own files, so we prefer the
      * path where the files actually do exist *)
     if dir2 = "" then
@@ -557,39 +578,40 @@ let check_camlp5 testcma = match !Prefs.camlp5dir with
     else dir2
 
 let check_camlp5_version () =
-  let s = camlexec.p4 in
-  (* translate 4 into 5 in the binary name *)
-  for i = 0 to String.length s - 1 do
-    if s.[i] = '4' then s.[i] <- '5'
-  done;
   try
-    let version_line, _ = run ~err:StdOut camlexec.p4 ["-v"] in
+    let camlp5o = which_camlpX "camlp5o" in
+    let version_line, _ = run ~err:StdOut camlp5o ["-v"] in
     let version = List.nth (string_split ' ' version_line) 2 in
     match string_split '.' version with
     | major::minor::_ when s2i major > 5 || (s2i major, s2i minor) >= (5,1) ->
-      printf "You have Camlp5 %s. Good!\n" version
+      printf "You have Camlp5 %s. Good!\n" version; camlp5o, version
     | _ -> failwith "bad version"
-  with _ -> die "Error: unsupported Camlp5 (version < 5.01 or unrecognized).\n"
+  with
+  | Not_found -> die "Error: cannot find Camlp5 binaries in path.\n"
+  | _ -> die "Error: unsupported Camlp5 (version < 5.01 or unrecognized).\n"
 
 let config_camlpX () =
   try
     if not !Prefs.usecamlp5 then raise NoCamlp5;
-    let lib = "gramlib" in
-    let dir = check_camlp5 (lib^".cma") in
-    let () = check_camlp5_version () in
-    "camlp5", dir, lib
+    let camlp5mod = "gramlib" in
+    let camlp5libdir = check_camlp5 (camlp5mod^".cma") in
+    let camlp5o, camlp5_version = check_camlp5_version () in
+    "camlp5", camlp5o, Filename.dirname camlp5o, camlp5libdir, camlp5mod, camlp5_version
   with NoCamlp5 ->
     (* We now try to use Camlp4, either by explicit choice or
        by lack of proper Camlp5 installation *)
-    let lib = "camlp4lib" in
-    let dir = camllib/"camlp4" in
-    if not (Sys.file_exists (dir/lib^".cma")) then
+    let camlp4mod = "camlp4lib" in
+    let camlp4libdir = camllib/"camlp4" in
+    if not (Sys.file_exists (camlp4libdir/camlp4mod^".cma")) then
       die "No Camlp4 installation found.\n";
-    let () = camlexec.p4 <- camlexec.p4 ^ "rf" in
-    ignore (run camlexec.p4 []);
-    "camlp4", dir, lib
+    try
+      let camlp4orf = which_camlpX "camlp4orf" in
+      let version_line, _ = run ~err:StdOut camlp4orf ["-v"] in
+      let camlp4_version = List.nth (string_split ' ' version_line) 2 in
+      "camlp4", camlp4orf, Filename.dirname camlp4orf, camlp4libdir, camlp4mod, camlp4_version
+    with _ -> die "No Camlp4 installation found.\n"
 
-let camlp4, fullcamlp4lib, camlp4mod = config_camlpX ()
+let camlpX, camlpXo, camlpXbindir, fullcamlpXlibdir, camlpXmod, camlpX_version = config_camlpX ()
 
 let shorten_camllib s =
   if starts_with s (camllib^"/") then
@@ -597,8 +619,7 @@ let shorten_camllib s =
     "+" ^ String.sub s l (String.length s - l)
   else s
 
-let camlp4lib = shorten_camllib fullcamlp4lib
-
+let camlpXlibdir = shorten_camllib fullcamlpXlibdir
 
 (** * Native compiler *)
 
@@ -608,8 +629,8 @@ let msg_byteonly () =
 let msg_no_ocamlopt () =
   printf "Cannot find the OCaml native-code compiler.\n"; msg_byteonly ()
 
-let msg_no_camlp4_cmxa () =
-  printf "Cannot find the native-code library of %s.\n" camlp4; msg_byteonly ()
+let msg_no_camlpX_cmxa () =
+  printf "Cannot find the native-code library of %s.\n" camlpX; msg_byteonly ()
 
 let msg_no_dynlink_cmxa () =
   printf "Cannot find native-code dynlink library.\n"; msg_byteonly ();
@@ -619,10 +640,13 @@ let msg_no_dynlink_cmxa () =
 
 let check_native () =
   if !Prefs.byteonly then raise Not_found;
-  if not (is_executable camlexec.opt || program_in_path camlexec.opt) then
+  let camloptopt = camlexec.opt ^ ".opt" in
+  if (is_executable camloptopt || program_in_path camloptopt) then
+    reset_caml_opt camlexec camloptopt
+  else if not (is_executable camlexec.opt || program_in_path camlexec.opt) then
     (msg_no_ocamlopt (); raise Not_found);
-  if not (Sys.file_exists (fullcamlp4lib/camlp4mod^".cmxa")) then
-    (msg_no_camlp4_cmxa (); raise Not_found);
+  if not (Sys.file_exists (fullcamlpXlibdir/camlpXmod^".cmxa")) then
+    (msg_no_camlpX_cmxa (); raise Not_found);
   if not (Sys.file_exists (camllib/"dynlink.cmxa")) then
     (msg_no_dynlink_cmxa (); raise Not_found);
   let version, _ = run camlexec.opt ["-version"] in
@@ -634,6 +658,20 @@ let check_native () =
 let best_compiler =
   try check_native (); "opt" with Not_found -> "byte"
 
+let _ =
+  let camllexopt = camlexec.lex ^ ".opt" in
+  if is_executable camllexopt || program_in_path camllexopt then
+    reset_caml_lex camlexec camllexopt
+
+let _ =
+  let camldepopt = camlexec.dep ^ ".opt" in
+  if is_executable camldepopt || program_in_path camldepopt then
+    reset_caml_dep camlexec camldepopt
+
+let _ =
+  let camldocopt = camlexec.doc ^ ".opt" in
+  if is_executable camldocopt || program_in_path camldocopt then
+    reset_caml_doc camlexec camldocopt
 
 (** * Native dynlink *)
 
@@ -930,10 +968,12 @@ let print_summary () =
   pr "  Coq VM bytecode link flags  : %s\n" (String.concat " " vmbyteflags);
   pr "  Other bytecode link flags   : %s\n" custom_flag;
   pr "  OS dependent libraries      : %s\n" osdeplibs;
-  pr "  OCaml/Camlp4 version        : %s\n" caml_version;
-  pr "  OCaml/Camlp4 binaries in    : %s\n" camlbin;
+  pr "  OCaml version               : %s\n" caml_version;
+  pr "  OCaml binaries in           : %s\n" camlbin;
   pr "  OCaml library in            : %s\n" camllib;
-  pr "  Camlp4 library in           : %s\n" camlp4lib;
+  pr "  %s version              : %s\n"     (String.capitalize camlpX) camlpX_version;
+  pr "  %s binaries in          : %s\n"     (String.capitalize camlpX) camlpXbindir;
+  pr "  %s library in           : %s\n"     (String.capitalize camlpX) camlpXlibdir;
   if best_compiler = "opt" then
     pr "  Native dynamic link support : %B\n" hasnatdynlink;
   if coqide <> "no" then
@@ -973,7 +1013,7 @@ let write_dbg_wrapper f =
   pr "# DO NOT EDIT THIS FILE: automatically generated by ../configure #\n\n";
   pr "export COQTOP=%S\n" coqtop;
   pr "OCAMLDEBUG=%S\n" (camlbin^"/ocamldebug");
-  pr "CAMLP4LIB=%S\n\n" camlp4lib;
+  pr "CAMLP4LIB=%S\n\n" camlpXlibdir;
   pr ". $COQTOP/dev/ocamldebug-coq.run\n";
   close_out o;
   Unix.chmod f 0o555
@@ -1012,10 +1052,10 @@ let write_configml f =
   pr_s "ocamllex" camlexec.lex;
   pr_s "camlbin" camlbin;
   pr_s "camllib" camllib;
-  pr_s "camlp4" camlp4;
-  pr_s "camlp4o" camlexec.p4;
-  pr_s "camlp4bin" camlp4bin;
-  pr_s "camlp4lib" camlp4lib;
+  pr_s "camlp4" camlpX;
+  pr_s "camlp4o" camlpXo;
+  pr_s "camlp4bin" camlpXbindir;
+  pr_s "camlp4lib" camlpXlibdir;
   pr_s "camlp4compat" camlp4compat;
   pr_s "cflags" cflags;
   pr_s "best" best_compiler;
@@ -1088,7 +1128,8 @@ let write_makefile f =
   List.iter (fun (v,msg,_,_) -> pr "# %s: path for %s\n" v msg) install_dirs;
   List.iter (fun (v,_,dir,_) -> pr "%s=%S\n" v dir) install_dirs;
   pr "\n# Coq version\n";
-  pr "VERSION=%s\n\n" coq_version;
+  pr "VERSION=%s\n" coq_version;
+  pr "VERSION4MACOS=%s\n\n" coq_macos_version;
   pr "# Objective-Caml compile command\n";
   pr "OCAML=%S\n" camlexec.top;
   pr "OCAMLC=%S\n" camlexec.byte;
@@ -1122,10 +1163,10 @@ let write_makefile f =
   pr "CAMLTIMEPROF=%s\n\n" coq_profile_flag;
   pr "# Camlp4 : flavor, binaries, libraries ...\n";
   pr "# NB : avoid using CAMLP4LIB (conflict under Windows)\n";
-  pr "CAMLP4=%s\n" camlp4;
-  pr "CAMLP4O=%S\n" camlexec.p4;
+  pr "CAMLP4=%s\n" camlpX;
+  pr "CAMLP4O=%S\n" camlpXo;
   pr "CAMLP4COMPAT=%s\n" camlp4compat;
-  pr "MYCAMLP4LIB=%S\n\n" camlp4lib;
+  pr "MYCAMLP4LIB=%S\n\n" camlpXlibdir;
   pr "# Your architecture\n";
   pr "# Can be obtain by UNIX command arch\n";
   pr "ARCH=%s\n" arch;

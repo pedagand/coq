@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -571,7 +571,6 @@ let constr_modpath (ind,_) = ind_modpath ind
 
 let ith_mutual_inductive (mind, _) i = (mind, i)
 let ith_constructor_of_inductive ind i = (ind, i)
-let ith_constructor_of_pinductive (ind,u) i = ((ind,i),u)
 let inductive_of_constructor (ind, i) = ind
 let index_of_constructor (ind, i) = i
 
@@ -686,8 +685,6 @@ type inv_rel_key = int (* index in the [rel_context] part of environment
 			  starting by the end, {\em inverse}
 			  of de Bruijn indice *)
 
-type id_key = Constant.t tableKey
-
 let eq_table_key f ik1 ik2 =
   if ik1 == ik2 then true
   else match ik1,ik2 with
@@ -695,8 +692,6 @@ let eq_table_key f ik1 ik2 =
   | VarKey id1, VarKey id2 -> Id.equal id1 id2
   | RelKey k1, RelKey k2 -> Int.equal k1 k2
   | _ -> false
-
-let eq_id_key = eq_table_key Constant.UserOrd.equal
 
 let eq_con_chk = Constant.UserOrd.equal
 let eq_mind_chk = MutInd.UserOrd.equal

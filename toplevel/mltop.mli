@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -47,7 +47,6 @@ val add_ml_dir : string -> unit
 val add_rec_ml_dir : string -> unit
 
 (** Adds a path to the Coq and ML paths *)
-val add_path : unix_path:string -> coq_root:Names.DirPath.t -> implicit:bool -> unit
 val add_rec_path : unix_path:string -> coq_root:Names.DirPath.t -> implicit:bool -> unit
 
 (** List of modules linked to the toplevel *)

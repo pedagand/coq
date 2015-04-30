@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -40,7 +40,7 @@ val extern_constr : ?lax:bool -> bool -> env -> Evd.evar_map -> constr -> constr
 val extern_constr_in_scope : bool -> scope_name -> env -> Evd.evar_map -> constr -> constr_expr
 val extern_reference : Loc.t -> Id.Set.t -> global_reference -> reference
 val extern_type : bool -> env -> Evd.evar_map -> types -> constr_expr
-val extern_sort : sorts -> glob_sort
+val extern_sort : Evd.evar_map -> sorts -> glob_sort
 val extern_rel_context : constr option -> env -> Evd.evar_map ->
   rel_context -> local_binder list
 

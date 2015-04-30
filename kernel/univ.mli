@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -27,6 +27,8 @@ sig
   val equal : t -> t -> bool
   (** Equality function *)
 
+  val hash : t -> int
+
   val make : Names.DirPath.t -> int -> t
   (** Create a new universe level from a unique identifier and an associated
       module path. *)
@@ -35,6 +37,8 @@ sig
   (** Pretty-printing *)
 
   val var : int -> t
+
+  val var_index : t -> int option
 end
 
 type universe_level = Level.t
@@ -45,7 +49,7 @@ module LSet :
 sig 
   include CSig.SetS with type elt = universe_level
 	      
-  val pr : t -> Pp.std_ppcmds
+  val pr : (Level.t -> Pp.std_ppcmds) -> t -> Pp.std_ppcmds
   (** Pretty-printing *)
 end
 
@@ -288,7 +292,7 @@ sig
   val subst_fn : universe_level_subst_fn -> t -> t
   (** Substitution by a level-to-level function. *)
 
-  val pr : t -> Pp.std_ppcmds
+  val pr : (Level.t -> Pp.std_ppcmds) -> t -> Pp.std_ppcmds
   (** Pretty-printing, no comments *)
 
   val levels : t -> LSet.t
@@ -305,6 +309,8 @@ val enforce_eq_instances : universe_instance constraint_function
 type 'a puniverses = 'a * universe_instance
 val out_punivs : 'a puniverses -> 'a
 val in_punivs : 'a -> 'a puniverses
+
+val eq_puniverses : ('a -> 'a -> bool) -> 'a puniverses -> 'a puniverses -> bool
 
 (** A vector of universe levels with universe constraints,
     representiong local universe variables and associated constraints *)
@@ -407,14 +413,16 @@ val instantiate_univ_constraints : universe_instance -> universe_context -> cons
 
 (** {6 Pretty-printing of universes. } *)
 
-val pr_universes : universes -> Pp.std_ppcmds
+val pr_universes : (Level.t -> Pp.std_ppcmds) -> universes -> Pp.std_ppcmds
 val pr_constraint_type : constraint_type -> Pp.std_ppcmds
-val pr_constraints : constraints -> Pp.std_ppcmds
-val pr_universe_context : universe_context -> Pp.std_ppcmds
-val pr_universe_context_set : universe_context_set -> Pp.std_ppcmds
+val pr_constraints : (Level.t -> Pp.std_ppcmds) -> constraints -> Pp.std_ppcmds
+val pr_universe_context : (Level.t -> Pp.std_ppcmds) -> universe_context -> Pp.std_ppcmds
+val pr_universe_context_set : (Level.t -> Pp.std_ppcmds) -> universe_context_set -> Pp.std_ppcmds
+val explain_universe_inconsistency : (Level.t -> Pp.std_ppcmds) -> 
+  univ_inconsistency -> Pp.std_ppcmds
+
 val pr_universe_level_subst : universe_level_subst -> Pp.std_ppcmds
 val pr_universe_subst : universe_subst -> Pp.std_ppcmds
-val explain_universe_inconsistency : univ_inconsistency -> Pp.std_ppcmds
 
 (** {6 Dumping to a file } *)
 

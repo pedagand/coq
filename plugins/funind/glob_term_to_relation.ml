@@ -252,7 +252,7 @@ let coq_False_ref =
 
 (*
   [make_discr_match_el \[e1,...en\]] builds match e1,...,en with
-  (the list of expresions on which we will do the matching)
+  (the list of expressions on which we will do the matching)
  *)
 let make_discr_match_el  =
   List.map (fun e -> (e,(Anonymous,None)))
@@ -674,7 +674,7 @@ and build_entry_lc_from_case env funname make_discr
 	   match el with brl end
 	   we first compute the list of lists corresponding to [el] and
 	   combine them .
-	   Then for each elemeent of the combinations,
+	   Then for each element of the combinations,
 	   we compute the result we compute one list per branch in [brl] and
 	   finally we just concatenate those list
 	*)
@@ -720,9 +720,9 @@ and build_entry_lc_from_case_term env types funname make_discr patterns_to_preve
   match brl with
     | [] -> (* computed_branches  *) {result = [];to_avoid = avoid}
     | br::brl' ->
-	(* alpha convertion to prevent name clashes *)
+	(* alpha conversion to prevent name clashes *)
 	let _,idl,patl,return = alpha_br avoid br in
-	let new_avoid  = idl@avoid in 	(* for now we can no more use idl as an indentifier *)
+	let new_avoid  = idl@avoid in 	(* for now we can no more use idl as an identifier *)
 	(* building a list of precondition stating that we are not in this branch
 	   (will be used in the following recursive calls)
 	*)
@@ -1149,7 +1149,7 @@ let rec rebuild_cons env nb_args relname args crossed_types depth rt =
     | _ -> mkGApp(mkGVar  relname,args@[rt]),Id.Set.empty
 
 
-(* debuging wrapper *)
+(* debugging wrapper *)
 let rebuild_cons env nb_args relname args crossed_types rt =
 (*   observennl  (str "rebuild_cons : rt := "++ pr_glob_constr rt ++  *)
 (* 		 str "nb_args := " ++ str (string_of_int nb_args)); *)
@@ -1163,7 +1163,7 @@ let rebuild_cons env nb_args relname args crossed_types rt =
 (* naive implementation of parameter detection.
 
    A parameter is an argument which is only preceded by parameters and whose
-   calls are all syntaxically equal.
+   calls are all syntactically equal.
 
    TODO: Find a valid way to deal with implicit arguments here!
 *)
@@ -1178,7 +1178,7 @@ let rec compute_cst_params relnames params = function
       compute_cst_params relnames t_params b
   | GCases _ ->
       params  (* If there is still cases at this point they can only be
-		 discriminitation ones *)
+		 discrimination ones *)
   | GSort _ -> params
   | GHole _ -> params
   | GIf _ | GRec _ | GCast _ ->
@@ -1233,11 +1233,11 @@ let rec rebuild_return_type rt =
 
 
 let do_build_inductive
-      mp_dp
-      funnames (funsargs: (Name.t * glob_constr * bool) list list)
+      evd (funconstants: Term.pconstant list) (funsargs: (Name.t * glob_constr * bool) list list)
       returned_types
       (rtl:glob_constr list) =
   let _time1 = System.get_time () in
+  let funnames = List.map (fun c -> Label.to_id (KerName.label (Constant.canonical (fst c)))) funconstants in
   (*   Pp.msgnl (prlist_with_sep fnl Printer.pr_glob_constr rtl); *)
   let funnames_as_set = List.fold_right Id.Set.add funnames Id.Set.empty in
   let funnames = Array.of_list funnames in
@@ -1252,27 +1252,25 @@ let do_build_inductive
   let relnames = Array.map mk_rel_id funnames in
   let relnames_as_set = Array.fold_right Id.Set.add relnames Id.Set.empty in
   (* Construction of the pseudo constructors *)
-  let env =
-    Array.fold_right
-      (fun id env ->
-       let c =
-	 match mp_dp with
-	 | None -> (Constrintern.global_reference id)
-	 | Some(mp,dp) -> mkConst (make_con mp dp (Label.of_id id))
-       in
-       Environ.push_named (id,None,
-			   try
-			     Typing.type_of env Evd.empty c
-			   with Not_found ->
-			     raise (UserError("do_build_inductive", str "Cannot handle partial fixpoint"))
-			  )  env
+  let evd,env =
+    Array.fold_right2
+      (fun id c (evd,env) ->
+       let evd,t = Typing.e_type_of env evd (mkConstU c) in
+       evd,
+       Environ.push_named (id,None,t)
+			   (* try *)
+			   (*   Typing.e_type_of env evd (mkConstU c) *)
+			   (* with Not_found -> *)
+			   (*   raise (UserError("do_build_inductive", str "Cannot handle partial fixpoint")) *)
+			 env
       )
       funnames
-      (Global.env ())
+      (Array.of_list funconstants)
+      (evd,Global.env ())
   in
   let resa = Array.map (build_entry_lc env  funnames_as_set []) rta in
   let env_with_graphs =
-    let rel_arity i funargs =  (* Reduilding arities (with parameters) *)
+    let rel_arity i funargs =  (* Rebuilding arities (with parameters) *)
       let rel_first_args :(Name.t * Glob_term.glob_constr * bool ) list  =
 	funargs
       in
@@ -1426,7 +1424,7 @@ let do_build_inductive
 (*   in *)
   let _time2 = System.get_time () in
   try
-    with_full_print (Flags.silently (Command.do_mutual_inductive rel_inds false false)) Decl_kinds.Finite
+    with_full_print (Flags.silently (Command.do_mutual_inductive rel_inds (Flags.is_universe_polymorphism ()) false)) Decl_kinds.Finite
   with
     | UserError(s,msg) as e ->
 	let _time3 = System.get_time () in
@@ -1461,9 +1459,9 @@ let do_build_inductive
 
 
 
-let build_inductive mp_dp funnames funsargs returned_types rtl =
+let build_inductive evd funconstants funsargs returned_types rtl =
   try
-    do_build_inductive mp_dp funnames funsargs returned_types rtl
+    do_build_inductive evd funconstants funsargs returned_types rtl
   with e when Errors.noncritical e -> raise (Building_graph e)
 
 

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -8,6 +8,7 @@
 
 open Declarations
 open Mod_subst
+open Univ
 
 (** Operations concerning types in [Declarations] :
     [constant_body], [mutual_inductive_body], [module_body] ... *)
@@ -74,6 +75,9 @@ val recarg_length : wf_paths -> int -> int
 val subst_wf_paths : substitution -> wf_paths -> wf_paths
 
 val subst_mind_body : substitution -> mutual_inductive_body -> mutual_inductive_body
+
+val inductive_instance : mutual_inductive_body -> universe_instance
+val inductive_context : mutual_inductive_body -> universe_context
 
 (** {6 Hash-consing} *)
 

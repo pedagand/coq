@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -105,6 +105,7 @@ type pref =
 
       mutable read_project : project_behavior;
       mutable project_file_name : string;
+      mutable project_path : string option;
 
       mutable encoding : inputenc;
 
@@ -144,6 +145,7 @@ type pref =
       mutable processing_color : string;
       mutable processed_color : string;
       mutable error_color : string;
+      mutable error_fg_color : string;
 
       mutable dynamic_word_wrap : bool;
       mutable show_line_number : bool;
@@ -179,8 +181,9 @@ let current = {
     source_language = "coq";
     source_style = "coq_style";
 
-    read_project = Ignore_args;
+    read_project = Append_args;
     project_file_name = "_CoqProject";
+    project_path = None;
 
     encoding = if Sys.os_type = "Win32" then Eutf8 else Elocale;
 
@@ -220,10 +223,11 @@ let current = {
     vertical_tabs = false;
     opposite_tabs = false;
 
-    background_color = "cornsilk";
-    processed_color = "light green";
-    processing_color = "light blue";
-    error_color = "#FFCCCC";
+    background_color = Tags.default_color;
+    processed_color = Tags.default_processed_color;
+    processing_color = Tags.default_processing_color;
+    error_color = Tags.default_error_color;
+    error_fg_color = Tags.default_error_fg_color;
 
     dynamic_word_wrap = false;
     show_line_number = false;
@@ -263,6 +267,7 @@ let save_pref () =
 
     add "project_options" [string_of_project_behavior p.read_project] ++
     add "project_file_name" [p.project_file_name] ++
+    add "project_path" (match p.project_path with None -> [] | Some s -> [s]) ++
 
     add "encoding" [string_of_inputenc p.encoding] ++
 
@@ -296,6 +301,7 @@ let save_pref () =
     add "processing_color" [p.processing_color] ++
     add "processed_color" [p.processed_color] ++
     add "error_color" [p.error_color] ++
+    add "error_fg_color" [p.error_fg_color] ++
     add "dynamic_word_wrap" [string_of_bool p.dynamic_word_wrap] ++
     add "show_line_number" [string_of_bool p.show_line_number] ++
     add "auto_indent" [string_of_bool p.auto_indent] ++
@@ -339,6 +345,7 @@ let load_pref () =
     set_hd "project_options"
       (fun v -> np.read_project <- (project_behavior_of_string v));
     set_hd "project_file_name" (fun v -> np.project_file_name <- v);
+    set_option "project_path" (fun v -> np.project_path <- v);
     set "automatic_tactics"
       (fun v -> np.automatic_tactics <- v);
     set_hd "cmd_print" (fun v -> np.cmd_print <- v);
@@ -382,6 +389,7 @@ let load_pref () =
     set_hd "processing_color" (fun v -> np.processing_color <- v);
     set_hd "processed_color" (fun v -> np.processed_color <- v);
     set_hd "error_color" (fun v -> np.error_color <- v);
+    set_hd "error_fg_color" (fun v -> np.error_fg_color <- v);
     set_bool "dynamic_word_wrap" (fun v -> np.dynamic_word_wrap <- v);
     set_bool "show_line_number" (fun v -> np.show_line_number <- v);
     set_bool "auto_indent" (fun v -> np.auto_indent <- v);
@@ -466,10 +474,15 @@ let configure ?(apply=(fun () -> ())) () =
       ~text:"Background color of errors"
       ~packing:(table#attach ~expand:`X ~left:0 ~top:3) ()
     in
+    let error_fg_label = GMisc.label
+      ~text:"Foreground color of errors"
+      ~packing:(table#attach ~expand:`X ~left:0 ~top:4) ()
+    in
     let () = background_label#set_xalign 0. in
     let () = processed_label#set_xalign 0. in
     let () = processing_label#set_xalign 0. in
     let () = error_label#set_xalign 0. in
+    let () = error_fg_label#set_xalign 0. in
     let background_button = GButton.color_button
       ~color:(Tags.color_of_string (current.background_color))
       ~packing:(table#attach ~left:1 ~top:0) ()
@@ -486,15 +499,19 @@ let configure ?(apply=(fun () -> ())) () =
       ~color:(Tags.get_error_color ())
       ~packing:(table#attach ~left:1 ~top:3) ()
     in
+    let error_fg_button = GButton.color_button
+      ~color:(Tags.get_error_fg_color ())
+      ~packing:(table#attach ~left:1 ~top:4) ()
+    in
     let reset_button = GButton.button
       ~label:"Reset"
       ~packing:box#pack ()
     in
     let reset_cb () =
-      background_button#set_color (Tags.color_of_string "cornsilk");
-      processing_button#set_color (Tags.color_of_string "light blue");
-      processed_button#set_color (Tags.color_of_string "light green");
-      error_button#set_color (Tags.color_of_string "#FFCCCC");
+      background_button#set_color Tags.(color_of_string default_color);
+      processing_button#set_color Tags.(color_of_string default_processing_color);
+      processed_button#set_color Tags.(color_of_string default_processed_color);
+      error_button#set_color Tags.(color_of_string default_error_color);
     in
     let _ = reset_button#connect#clicked ~callback:reset_cb in
     let label = "Color configuration" in
@@ -503,10 +520,12 @@ let configure ?(apply=(fun () -> ())) () =
       current.processing_color <- Tags.string_of_color processing_button#color;
       current.processed_color <- Tags.string_of_color processed_button#color;
       current.error_color <- Tags.string_of_color error_button#color;
+      current.error_fg_color <- Tags.string_of_color error_fg_button#color;
       !refresh_editor_hook ();
       Tags.set_processing_color processing_button#color;
       Tags.set_processed_color processed_button#color;
-      Tags.set_error_color error_button#color
+      Tags.set_error_color error_button#color;
+      Tags.set_error_fg_color error_fg_button#color
     in
     custom ~label box callback true
   in

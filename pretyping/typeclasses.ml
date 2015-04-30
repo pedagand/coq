@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -14,7 +14,6 @@ open Term
 open Vars
 open Context
 open Evd
-open Environ
 open Util
 open Typeclasses_errors
 open Libobject
@@ -427,7 +426,6 @@ let add_class cl =
   cl.cl_projs
 
 
-open Declarations
       
 (*
  * interface functions
@@ -484,15 +482,6 @@ let is_instance = function
   | ConstructRef (ind,_) -> 
       is_class (IndRef ind)
   | _ -> false
-
-let is_implicit_arg = function
-| Evar_kinds.GoalEvar -> false
-| _ -> true
-  (* match k with *)
-  (*     ImplicitArg (ref, (n, id), b) -> true *)
-  (*   | InternalHole -> true *)
-  (*   | _ -> false *)
-
 
 (* To embed a boolean for resolvability status.
    This is essentially a hack to mark which evars correspond to

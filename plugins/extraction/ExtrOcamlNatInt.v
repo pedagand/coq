@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -59,6 +59,7 @@ Extract Constant Compare_dec.nat_compare =>
  "fun n m -> if n=m then Eq else if n<m then Lt else Gt".
 Extract Inlined Constant Compare_dec.leb => "(<=)".
 Extract Inlined Constant Compare_dec.le_lt_dec => "(<=)".
+Extract Inlined Constant Compare_dec.lt_dec => "(<)".
 Extract Constant Compare_dec.lt_eq_lt_dec =>
  "fun n m -> if n>m then None else Some (n<m)".
 

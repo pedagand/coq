@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -20,12 +20,10 @@
 
 (** A rich pretty-print is composed of: *)
 type rich_pp =
-    (** - a raw pretty-print ; *)
-    string
 
     (** - a generalized semi-structured document whose attributes are
         annotations ; *)
-    * Ppannotation.t Richpp.located Xml_datatype.gxml
+    Ppannotation.t Richpp.located Xml_datatype.gxml
 
     (** - an XML document, representing annotations as usual textual
         XML attributes. *)

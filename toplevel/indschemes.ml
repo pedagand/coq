@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -85,7 +85,7 @@ let _ =
     { optsync  = true;
       optdepr  = false;
       optname  = "automatic declaration of boolean equality";
-      optkey   = ["Equality";"Schemes"];
+      optkey   = ["Boolean";"Equality";"Schemes"];
       optread  = (fun () -> !eq_flag) ;
       optwrite = (fun b -> eq_flag := b) }
 let _ = (* compatibility *)

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -145,20 +145,11 @@ let rec functor_iter fty f0 = function
 (** {6 Misc operations } *)
 
 let module_type_of_module mb =
-  { typ_mp = mb.mod_mp;
-    typ_expr = mb.mod_type;
-    typ_expr_alg = None;
-    typ_constraints = mb.mod_constraints;
-    typ_delta = mb.mod_delta }
+  { mb with mod_expr = Abstract; mod_type_alg = None }
 
 let module_body_of_type mp mtb =
-  { mod_mp = mp;
-    mod_type = mtb.typ_expr;
-    mod_type_alg = mtb.typ_expr_alg;
-    mod_expr = Abstract;
-    mod_constraints = mtb.typ_constraints;
-    mod_delta = mtb.typ_delta;
-    mod_retroknowledge = [] }
+  assert (mtb.mod_expr == Abstract);
+  { mtb with mod_mp = mp }
 
 let check_modpath_equiv env mp1 mp2 =
   if ModPath.equal mp1 mp2 then ()
@@ -182,34 +173,15 @@ let implem_iter fs fa impl = match impl with
 
 let id_delta x y = x
 
-let rec subst_with_body sub = function
+let subst_with_body sub = function
   |WithMod(id,mp) as orig ->
     let mp' = subst_mp sub mp in
     if mp==mp' then orig else WithMod(id,mp')
-  |WithDef(id,c) as orig ->
+  |WithDef(id,(c,ctx)) as orig ->
     let c' = subst_mps sub c in
-    if c==c' then orig else WithDef(id,c')
+    if c==c' then orig else WithDef(id,(c',ctx))
 
-and subst_modtype sub do_delta mtb=
-  let { typ_mp = mp; typ_expr = ty; typ_expr_alg = aty } = mtb in
-  let mp' = subst_mp sub mp in
-  let sub =
-    if ModPath.equal mp mp' then sub
-    else add_mp mp mp' empty_delta_resolver sub
-  in
-  let ty' = subst_signature sub do_delta ty in
-  let aty' = Option.smartmap (subst_expression sub id_delta) aty in
-  let delta' = do_delta mtb.typ_delta sub in
-  if mp==mp' && ty==ty' && aty==aty' && delta'==mtb.typ_delta
-  then mtb
-  else
-    { mtb with
-      typ_mp = mp';
-      typ_expr = ty';
-      typ_expr_alg = aty';
-      typ_delta = delta' }
-
-and subst_structure sub do_delta sign =
+let rec subst_structure sub do_delta sign =
   let subst_body ((l,body) as orig) = match body with
     |SFBconst cb ->
       let cb' = subst_const_body sub cb in
@@ -226,11 +198,12 @@ and subst_structure sub do_delta sign =
   in
   List.smartmap subst_body sign
 
-and subst_module sub do_delta mb =
+and subst_body is_mod sub do_delta mb =
   let { mod_mp=mp; mod_expr=me; mod_type=ty; mod_type_alg=aty } = mb in
   let mp' = subst_mp sub mp in
   let sub =
-    if not (is_functor ty) || ModPath.equal mp mp' then sub
+    if ModPath.equal mp mp' then sub
+    else if is_mod && not (is_functor ty) then sub
     else add_mp mp mp' empty_delta_resolver sub
   in
   let ty' = subst_signature sub do_delta ty in
@@ -249,6 +222,10 @@ and subst_module sub do_delta mb =
       mod_type = ty';
       mod_type_alg = aty';
       mod_delta = delta' }
+
+and subst_module sub do_delta mb = subst_body true sub do_delta mb
+
+and subst_modtype sub do_delta mtb = subst_body false sub do_delta mtb
 
 and subst_expr sub do_delta seb = match seb with
   |MEident mp ->
@@ -360,7 +337,7 @@ let strengthen_const mp_from l cb resolver =
     in
       { cb with
 	const_body = Def (Mod_subst.from_val (mkConstU (con,u)));
-	const_body_code = Cemitcodes.from_val (Cbytegen.compile_alias con) }
+	const_body_code = Some (Cemitcodes.from_val (Cbytegen.compile_alias (con,u))) }
 
 let rec strengthen_mod mp_from mp_to mb =
   if mp_in_delta mb.mod_mp mb.mod_delta then mb
@@ -397,19 +374,19 @@ and strengthen_sig mp_from struc mp_to reso = match struc with
 
 let strengthen mtb mp =
   (* Has mtb already been strengthened ? *)
-  if mp_in_delta mtb.typ_mp mtb.typ_delta then mtb
-  else match mtb.typ_expr with
+  if mp_in_delta mtb.mod_mp mtb.mod_delta then mtb
+  else match mtb.mod_type with
   |NoFunctor struc ->
-    let reso',struc' = strengthen_sig mtb.typ_mp struc mp mtb.typ_delta in
+    let reso',struc' = strengthen_sig mtb.mod_mp struc mp mtb.mod_delta in
     { mtb with
-      typ_expr = NoFunctor struc';
-      typ_delta =
-        add_delta_resolver mtb.typ_delta
-	  (add_mp_delta_resolver mtb.typ_mp mp reso') }
+      mod_type = NoFunctor struc';
+      mod_delta =
+        add_delta_resolver mtb.mod_delta
+	  (add_mp_delta_resolver mtb.mod_mp mp reso') }
   |MoreFunctor _ -> mtb
 
 let inline_delta_resolver env inl mp mbid mtb delta =
-  let constants = inline_of_delta inl mtb.typ_delta in
+  let constants = inline_of_delta inl mtb.mod_delta in
   let rec make_inline delta = function
     | [] -> delta
     | (lev,kn)::r ->
@@ -451,15 +428,19 @@ let rec strengthen_and_subst_mod mb subst mp_from mp_to =
 and strengthen_and_subst_struct str subst mp_from mp_to alias incl reso =
   match str with
     | [] -> empty_delta_resolver,[]
-    | (l,SFBconst cb) :: rest ->
+    | (l,SFBconst cb) as item :: rest ->
         let cb' = subst_const_body subst cb in
-        let cb'' =
+        let cb' =
           if alias then cb'
           else strengthen_const mp_from l cb' reso
         in
-        let item' = l, SFBconst cb'' in
+        let item' = if cb' == cb then item else (l, SFBconst cb') in
 	let reso',rest' =
 	  strengthen_and_subst_struct rest subst mp_from mp_to alias incl reso
+        in
+        let str' =
+          if rest' == rest && item' == item then str
+          else item' :: rest'
         in
 	if incl then
           (* If we are performing an inclusion we need to add
@@ -468,26 +449,31 @@ and strengthen_and_subst_struct str subst mp_from mp_to alias incl reso =
           let kn_from = KerName.make2 mp_from l in
           let kn_to = KerName.make2 mp_to l in
           let old_name = kn_of_delta reso kn_from in
-	  add_kn_delta_resolver kn_to old_name reso', item'::rest'
+	  add_kn_delta_resolver kn_to old_name reso', str'
 	else
 	  (* In this case the fact that the constant mp_to.l is
 	     \Delta-equivalent to resolver(mp_from.l) is already known
 	     because reso' contains mp_to maps to reso(mp_from) *)
-	  reso', item'::rest'
-    | (l,SFBmind mib) :: rest ->
-	let item' = l,SFBmind (subst_mind_body subst mib) in
+	  reso', str'
+    | (l,SFBmind mib) as item :: rest ->
+        let mib' = subst_mind_body subst mib in
+        let item' = if mib' == mib then item else (l, SFBmind mib') in
 	let reso',rest' =
 	  strengthen_and_subst_struct rest subst mp_from mp_to alias incl reso
+        in
+        let str' =
+          if rest' == rest && item' == item then str
+          else item' :: rest'
         in
 	(* Same as constant *)
 	if incl then
 	  let kn_from = KerName.make2 mp_from l in
 	  let kn_to = KerName.make2 mp_to l in
 	  let old_name = kn_of_delta reso kn_from in
-	  add_kn_delta_resolver kn_to old_name reso', item'::rest'
+          add_kn_delta_resolver kn_to old_name reso', str'
 	else
-	  reso', item'::rest'
-    | (l,SFBmodule mb) :: rest ->
+          reso', str'
+    | (l,SFBmodule mb) as item :: rest ->
 	let mp_from' = MPdot (mp_from,l) in
 	let mp_to' = MPdot (mp_to,l) in
 	let mb' = if alias then
@@ -495,31 +481,39 @@ and strengthen_and_subst_struct str subst mp_from mp_to alias incl reso =
 	else
 	  strengthen_and_subst_mod mb subst mp_from' mp_to'
 	in
-	let item' = l,SFBmodule mb' in
+        let item' = if mb' == mb then item else (l, SFBmodule mb') in
 	let reso',rest' =
 	  strengthen_and_subst_struct rest subst mp_from mp_to alias incl reso
+        in
+        let str' =
+          if rest' == rest && item' == item then str
+          else item' :: rest'
         in
         (* if mb is a functor we should not derive new equivalences
            on names, hence we add the fact that the functor can only
            be equivalent to itself. If we adopt an applicative
            semantic for functor this should be changed.*)
 	if is_functor mb'.mod_type then
-	  add_mp_delta_resolver mp_to' mp_to' reso', item':: rest'
+          add_mp_delta_resolver mp_to' mp_to' reso', str'
 	else
-	  add_delta_resolver reso' mb'.mod_delta, item':: rest'
-    | (l,SFBmodtype mty) :: rest ->
+          add_delta_resolver reso' mb'.mod_delta, str'
+    | (l,SFBmodtype mty) as item :: rest ->
 	let mp_from' = MPdot (mp_from,l) in
 	let mp_to' = MPdot(mp_to,l) in
 	let subst' = add_mp mp_from' mp_to' empty_delta_resolver subst in
-	let mty = subst_modtype subst'
+	let mty' = subst_modtype subst'
 	  (fun resolver _ -> subst_dom_codom_delta_resolver subst' resolver)
           mty
         in
-        let item' = l,SFBmodtype mty in
+        let item' = if mty' == mty then item else (l, SFBmodtype mty') in
 	let reso',rest' =
           strengthen_and_subst_struct rest subst mp_from mp_to alias incl reso
         in
-	add_mp_delta_resolver mp_to' mp_to' reso', item'::rest'
+        let str' =
+          if rest' == rest && item' == item then str
+          else item' :: rest'
+        in
+	add_mp_delta_resolver mp_to' mp_to' reso', str'
 
 
 (** Let P be a module path when we write:
@@ -556,9 +550,9 @@ let strengthen_and_subst_mb mb mp include_b = match mb.mod_type with
     subst_module subst do_delta_dom_codom mb
 
 let subst_modtype_and_resolver mtb mp =
-  let subst = map_mp mtb.typ_mp mp empty_delta_resolver in
-  let new_delta = subst_dom_codom_delta_resolver subst mtb.typ_delta in
-  let full_subst = map_mp mtb.typ_mp mp new_delta in
+  let subst = map_mp mtb.mod_mp mp empty_delta_resolver in
+  let new_delta = subst_dom_codom_delta_resolver subst mtb.mod_delta in
+  let full_subst = map_mp mtb.mod_mp mp new_delta in
   subst_modtype full_subst do_delta_dom_codom mtb
 
 (** {6 Cleaning a module expression from bounded parts }
@@ -585,11 +579,6 @@ let rec clean_module l mb =
   if typ==typ' && impl==impl' then mb
   else { mb with mod_type=typ'; mod_expr=impl' }
 
-and clean_modtype l mt =
-  let ty = mt.typ_expr in
-  let ty' = clean_signature l ty in
-  if ty==ty' then mt else { mt with typ_expr=ty' }
-
 and clean_field l field = match field with
   |(lab,SFBmodule mb) ->
     let mb' = clean_module l mb in
@@ -599,10 +588,10 @@ and clean_field l field = match field with
 and clean_structure l = List.smartmap (clean_field l)
 
 and clean_signature l =
-  functor_smartmap (clean_modtype l) (clean_structure l)
+  functor_smartmap (clean_module l) (clean_structure l)
 
 and clean_expression l =
-  functor_smartmap (clean_modtype l) (fun me -> me)
+  functor_smartmap (clean_module l) (fun me -> me)
 
 let rec collect_mbid l sign =  match sign with
   |MoreFunctor (mbid,ty,m) ->
@@ -630,17 +619,13 @@ let join_structure except otab s =
     implem_iter join_signature join_expression mb.mod_expr;
     Option.iter join_expression mb.mod_type_alg;
     join_signature mb.mod_type
-  and join_modtype mt =
-    Option.iter join_expression mt.typ_expr_alg;
-    join_signature mt.typ_expr
   and join_field (l,body) = match body with
     |SFBconst sb -> join_constant_body except otab sb
     |SFBmind _ -> ()
-    |SFBmodule m -> join_module m
-    |SFBmodtype m -> join_modtype m
+    |SFBmodule m |SFBmodtype m -> join_module m
   and join_structure struc = List.iter join_field struc
   and join_signature sign =
-    functor_iter join_modtype join_structure sign
-  and join_expression me = functor_iter join_modtype (fun _ -> ()) me in
+    functor_iter join_module join_structure sign
+  and join_expression me = functor_iter join_module (fun _ -> ()) me in
   join_structure s
 

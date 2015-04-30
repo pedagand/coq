@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -63,7 +63,7 @@ val all_no_fail_flags : inference_flags
 
 val all_and_fail_flags : inference_flags
 
-(** Allow references to syntaxically inexistent variables (i.e., if applied on an inductive) *)
+(** Allow references to syntactically nonexistent variables (i.e., if applied on an inductive) *)
 val allow_anonymous_refs : bool ref
   
 (** Generic call to the interpreter from glob_constr to open_constr, leaving

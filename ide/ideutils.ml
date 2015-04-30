@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -132,8 +132,6 @@ let mktimer () =
              with Glib.GError _ -> ());
              timer := None) }
 
-let last_dir = ref ""
-
 let filter_all_files () = GFile.filter
   ~name:"All"
   ~patterns:["*"] ()
@@ -142,8 +140,11 @@ let filter_coq_files () =  GFile.filter
   ~name:"Coq source code"
   ~patterns:[ "*.v"] ()
 
-let select_file_for_open ~title () =
-  let file = ref None in
+let current_dir () = match current.project_path with
+| None -> ""
+| Some dir -> dir
+
+let select_file_for_open ~title ?filename () =
   let file_chooser =
     GWindow.file_chooser_dialog ~action:`OPEN ~modal:true ~title ()
   in
@@ -152,19 +153,22 @@ let select_file_for_open ~title () =
   file_chooser#add_filter (filter_coq_files ());
   file_chooser#add_filter (filter_all_files ());
   file_chooser#set_default_response `OPEN;
-  ignore (file_chooser#set_current_folder !last_dir);
-  begin match file_chooser#run () with
+  let dir = match filename with
+    | None -> current_dir ()
+    | Some f -> Filename.dirname f in
+  ignore (file_chooser#set_current_folder dir);
+  let file =
+    match file_chooser#run () with
     | `OPEN ->
       begin
-	file := file_chooser#filename;
-	match !file with
-	  | None -> ()
-	  | Some s -> last_dir := Filename.dirname s;
+	match file_chooser#filename with
+	  | None -> None
+	  | Some _ as f ->
+            current.project_path <- file_chooser#current_folder; f
       end
-    | `DELETE_EVENT | `CANCEL -> ()
-  end ;
+    | `DELETE_EVENT | `CANCEL -> None in
   file_chooser#destroy ();
-  !file
+  file
 
 let select_file_for_save ~title ?filename () =
   let file = ref None in
@@ -175,13 +179,10 @@ let select_file_for_save ~title ?filename () =
   file_chooser#add_select_button_stock `SAVE `SAVE ;
   file_chooser#add_filter (filter_coq_files ());
   file_chooser#add_filter (filter_all_files ());
-  (* this line will be used when a lablgtk >= 2.10.0 is the default
-     on most distributions:
-     file_chooser#set_do_overwrite_confirmation true;
-  *)
+  file_chooser#set_do_overwrite_confirmation true;
   file_chooser#set_default_response `SAVE;
   let dir,filename = match filename with
-    |None -> !last_dir, ""
+    |None -> current_dir (), ""
     |Some f -> Filename.dirname f, Filename.basename f
   in
   ignore (file_chooser#set_current_folder dir);
@@ -192,7 +193,7 @@ let select_file_for_save ~title ?filename () =
         file := file_chooser#filename;
         match !file with
             None -> ()
-          | Some s -> last_dir := Filename.dirname s;
+          | Some s -> current.project_path <- file_chooser#current_folder
       end
     | `DELETE_EVENT | `CANCEL -> ()
   end ;
@@ -246,7 +247,14 @@ let coqtop_path () =
 	    let i = Str.search_backward (Str.regexp_string "coqide") prog pos
             in
 	    String.blit "coqtop" 0 prog i 6;
-	    if Sys.file_exists prog then prog else "coqtop"
+	    if Sys.file_exists prog then prog
+	    else
+	      let in_macos_bundle =
+		Filename.concat
+		  (Filename.dirname prog)
+		  (Filename.concat "../Resources/bin" (Filename.basename prog))
+	      in if Sys.file_exists in_macos_bundle then in_macos_bundle
+		 else "coqtop"
 	  with Not_found -> "coqtop"
   in file
 
@@ -279,7 +287,7 @@ let default_logger level message =
 
 (** {6 File operations} *)
 
-(** A customized [stat] function. Exceptions are catched. *)
+(** A customized [stat] function. Exceptions are caught. *)
 
 type stats = MTime of float | NoSuchFile | OtherError
 

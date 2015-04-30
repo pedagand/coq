@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -59,22 +59,7 @@ let dloc = Loc.ghost
 
 let typ_of = Retyping.get_type_of
 
-(* Option for 8.4 compatibility *)
 open Goptions
-let legacy_elim_if_not_fully_applied_argument = ref false
-
-let use_legacy_elim_if_not_fully_applied_argument () =
-  !legacy_elim_if_not_fully_applied_argument
-  || Flags.version_less_or_equal Flags.V8_4
-
-let _ =
-  declare_bool_option
-    { optsync  = true;
-      optdepr  = false;
-      optname  = "partially applied elimination argument legacy";
-      optkey   = ["Legacy";"Partially";"Applied";"Elimination";"Argument"];
-      optread  = (fun () -> !legacy_elim_if_not_fully_applied_argument) ;
-      optwrite = (fun b -> legacy_elim_if_not_fully_applied_argument := b) }
 
 (* Option for 8.2 compatibility *)
 let dependent_propositions_elimination = ref true
@@ -440,7 +425,7 @@ let pf_reduce_decl redfun where (id,c,ty) gl =
   match c with
   | None ->
       if where == InHypValueOnly then
-	errorlabstrm "" (pr_id id ++ str "has no value.");
+	errorlabstrm "" (pr_id id ++ str " has no value.");
       (id,None,redfun' ty)
   | Some b ->
       let b' = if where != InHypTypeOnly then redfun' b else b in
@@ -537,7 +522,7 @@ let pf_e_reduce_decl redfun where (id,c,ty) gl =
   match c with
   | None ->
       if where == InHypValueOnly then
-	errorlabstrm "" (pr_id id ++ str "has no value.");
+	errorlabstrm "" (pr_id id ++ str " has no value.");
     let sigma, ty' = redfun sigma ty in
       sigma, (id,None,ty')
   | Some b ->
@@ -580,12 +565,16 @@ let e_pf_change_decl (redfun : bool -> e_reduction_function) where (id,c,ty) env
   match c with
   | None ->
       if where == InHypValueOnly then
-	errorlabstrm "" (pr_id id ++ str "has no value.");
+	errorlabstrm "" (pr_id id ++ str " has no value.");
     let sigma',ty' = redfun false env sigma ty in
       sigma', (id,None,ty')
   | Some b ->
-      let sigma',b' = if where != InHypTypeOnly then redfun true env sigma b else sigma, b in
-      let sigma',ty' = if where != InHypValueOnly then redfun false env sigma ty else sigma', ty in
+      let sigma',b' = 
+	if where != InHypTypeOnly then redfun true env sigma b else sigma, b 
+      in
+      let sigma',ty' = 
+	if where != InHypValueOnly then redfun false env sigma' ty else sigma', ty 
+      in
 	sigma', (id,Some b',ty')
 
 let e_change_in_hyp redfun (id,where) =
@@ -595,7 +584,10 @@ let e_change_in_hyp redfun (id,where) =
       (Proofview.Goal.env gl) (Proofview.Goal.sigma gl))
     convert_hyp
 
-type change_arg = evar_map -> evar_map * constr
+type change_arg = Pattern.patvar_map -> evar_map -> evar_map * constr
+
+let make_change_arg c =
+  fun pats sigma -> (sigma, replace_vars (Id.Map.bindings pats) c)
 
 let check_types env sigma mayneedglobalcheck deep newc origc =
   let t1 = Retyping.get_type_of env sigma newc in
@@ -623,21 +615,15 @@ let change_and_check cv_pb mayneedglobalcheck deep t env sigma c =
   if not b then errorlabstrm "convert-check-hyp" (str "Not convertible.");
   sigma, t'
 
-let change_and_check_subst cv_pb mayneedglobalcheck subst t env sigma c =
-  let t' sigma =
-    let sigma, t = t sigma in
-      sigma, replace_vars (Id.Map.bindings subst) t 
-  in change_and_check cv_pb mayneedglobalcheck true t' env sigma c
-
 (* Use cumulativity only if changing the conclusion not a subterm *)
 let change_on_subterm cv_pb deep t where env sigma c =
   let mayneedglobalcheck = ref false in
   let sigma,c = match where with
-  | None -> change_and_check cv_pb mayneedglobalcheck deep t env sigma c
+  | None -> change_and_check cv_pb mayneedglobalcheck deep (t Id.Map.empty) env sigma c
   | Some occl ->
       e_contextually false occl
         (fun subst ->
-          change_and_check_subst Reduction.CONV mayneedglobalcheck subst t)
+          change_and_check Reduction.CONV mayneedglobalcheck true (t subst))
         env sigma c in
   if !mayneedglobalcheck then
     begin
@@ -667,7 +653,7 @@ let change chg c cls gl =
     cls) gl
 
 let change_concl t = 
-  change_in_concl None (fun sigma -> sigma, t)
+  change_in_concl None (make_change_arg t)
 
 (* Pour usage interne (le niveau User est pris en compte par reduce) *)
 let red_in_concl        = reduct_in_concl (red_product,REVERTcast)
@@ -779,8 +765,6 @@ let intro_then = intro_then_gen (NamingAvoid []) MoveLast false false
 let intro = intro_gen (NamingAvoid []) MoveLast false false
 let introf = intro_gen (NamingAvoid []) MoveLast true false
 let intro_avoiding l = intro_gen (NamingAvoid l) MoveLast false false
-
-let intro_then_force = intro_then_gen (NamingAvoid []) MoveLast true false
 
 let intro_move_avoid idopt avoid hto = match idopt with
   | None -> intro_gen (NamingAvoid avoid) hto true false
@@ -895,7 +879,7 @@ let msg_quantified_hypothesis = function
   | NamedHyp id ->
       str "quantified hypothesis named " ++ pr_id id
   | AnonHyp n ->
-      int n ++ str (match n with 1 -> "st" | 2 -> "nd" | _ -> "th") ++
+      pr_nth n ++
       str " non dependent hypothesis"
 
 let depth_of_quantified_hypothesis red h gl =
@@ -1135,11 +1119,18 @@ let enforce_prop_bound_names rename tac =
   | _ ->
       tac
 
+let rec contract_letin_in_lam_header c =
+  match kind_of_term c with
+  | Lambda (x,t,c)  -> mkLambda (x,t,contract_letin_in_lam_header c)
+  | LetIn (x,b,t,c) -> contract_letin_in_lam_header (subst1 b c)
+  | _ -> c
+
 let elimination_clause_scheme with_evars ?(with_classes=true) ?(flags=elim_flags ()) 
     rename i (elim, elimty, bindings) indclause =
   Proofview.Goal.enter begin fun gl ->
   let env = Proofview.Goal.env gl in
   let sigma = Proofview.Goal.sigma gl in
+  let elim = contract_letin_in_lam_header elim in
   let elimclause = make_clenv_binding env sigma (elim, elimty) bindings in
   let indmv =
     (match kind_of_term (nth_arg i elimclause.templval.rebus) with
@@ -1293,6 +1284,7 @@ let elimination_in_clause_scheme with_evars ?(flags=elim_flags ())
   Proofview.Goal.enter begin fun gl ->
   let env = Proofview.Goal.env gl in
   let sigma = Proofview.Goal.sigma gl in
+  let elim = contract_letin_in_lam_header elim in
   let elimclause = make_clenv_binding env sigma (elim, elimty) bindings in
   let indmv = destMeta (nth_arg i elimclause.templval.rebus) in
   let hypmv =
@@ -1518,7 +1510,7 @@ let apply_with_delayed_bindings_gen b e l =
       let env = Proofview.Goal.env gl in
       let sigma, cb = f env sigma in
 	Tacticals.New.tclWITHHOLES e
-          (general_apply b b e k) sigma (loc,cb)
+          (general_apply b b e k (loc,cb)) sigma
     end
   in
   let rec aux = function
@@ -1621,8 +1613,8 @@ let apply_in_delayed_once sidecond_first with_delta with_destruct with_evars nam
     let sigma, c = f env sigma in
     Tacticals.New.tclWITHHOLES with_evars 
       (apply_in_once sidecond_first with_delta with_destruct with_evars
-         naming id (clear_flag,(loc,c)))
-      sigma tac
+         naming id (clear_flag,(loc,c)) tac)
+      sigma
   end
 
 (* A useful resolution tactic which, if c:A->B, transforms |- C into
@@ -1975,21 +1967,25 @@ let intro_decomp_eq_function = ref (fun _ -> failwith "Not implemented")
 let declare_intro_decomp_eq f = intro_decomp_eq_function := f
 
 let my_find_eq_data_decompose gl t =
-  try find_eq_data_decompose gl t
+  try Some (find_eq_data_decompose gl t)
   with e when is_anomaly e
     (* Hack in case equality is not yet defined... one day, maybe,
        known equalities will be dynamically registered *)
-      -> raise ConstrMatching.PatternMatchingFailure
+      -> None
+  | Constr_matching.PatternMatchingFailure -> None
 
 let intro_decomp_eq loc l thin tac id =
   Proofview.Goal.nf_enter begin fun gl ->
   let c = mkVar id in
   let t = Tacmach.New.pf_type_of gl c in
   let _,t = Tacmach.New.pf_reduce_to_quantified_ind gl t in
-  let eq,u,eq_args = my_find_eq_data_decompose gl t in
-  !intro_decomp_eq_function
+  match my_find_eq_data_decompose gl t with
+  | Some (eq,u,eq_args) ->
+    !intro_decomp_eq_function
     (fun n -> tac ((dloc,id)::thin) (Some (true,n)) l)
     (eq,t,eq_args) (c, t)
+  | None ->
+    Tacticals.New.tclZEROMSG (str "Not a primitive equality here.")
   end
 
 let intro_or_and_pattern loc bracketed ll thin tac id =
@@ -2151,12 +2147,12 @@ and intro_pattern_action loc b style pat thin tac id = match pat with
         let sigma = Proofview.Goal.sigma gl in
         let env = Proofview.Goal.env gl in
         let sigma,c = f env sigma in
-        Proofview.Unsafe.tclEVARS sigma <*>
+        Tacticals.New.tclWITHHOLES false
           (Tacticals.New.tclTHENFIRST
              (* Skip the side conditions of the apply *)
              (apply_in_once false true true true naming id
-                (None,(sigma,(c,NoBindings))) tac_ipat))
-	  (tac thin None [])
+                (None,(sigma,(c,NoBindings))) tac_ipat) (tac thin None []))
+          sigma
       end
 
 and prepare_intros_loc loc dft = function
@@ -2327,7 +2323,10 @@ let mkletin_goal env sigma store with_eq dep (id,lastlhyp,ccl,c) ty =
       let heq = match ido with
       | IntroAnonymous -> fresh_id_in_env [id] (add_prefix "Heq" id) env
       | IntroFresh heq_base -> fresh_id_in_env [id] heq_base env
-      | IntroIdentifier id -> id in
+      | IntroIdentifier id ->
+          if List.mem id (ids_of_named_context (named_context env)) then
+            user_err_loc (loc,"",pr_id id ++ str" is already used.");
+          id in
       let eqdata = build_coq_eq_data () in
       let args = if lr then [t;mkVar id;c] else [t;c;mkVar id]in
       let sigma, eq = Evd.fresh_global env sigma eqdata.eq in
@@ -2767,7 +2766,7 @@ let atomize_param_of_ind_then (indref,nparams,_) hyp0 tac =
     if Int.equal i nparams then
       let t = applist (hd, params@args) in
       Tacticals.New.tclTHEN
-        (change_in_hyp None (fun sigma -> sigma, t) (hyp0,InHypTypeOnly))
+        (change_in_hyp None (make_change_arg t) (hyp0,InHypTypeOnly))
         (tac avoid)
     else
       let c = List.nth argl (i-1) in
@@ -2804,12 +2803,6 @@ let atomize_param_of_ind_then (indref,nparams,_) hyp0 tac =
   in
   atomize_one (List.length argl) [] []
   end
-
-let find_atomic_param_of_ind nparams indtyp =
-  let argl = snd (decompose_app indtyp) in
-  let params,args = List.chop nparams argl in
-  let test c = isVar c && not (List.exists (dependent c) params) in
-  List.map destVar (List.filter test args)
 
 (* [cook_sign] builds the lists [beforetoclear] (preceding the
    ind. var.) and [aftertoclear] (coming after the ind. var.)  of hyps
@@ -3668,6 +3661,7 @@ let induction_tac with_evars params indvars elim gl =
   let ({elimindex=i;elimbody=(elimc,lbindelimc);elimrename=rename},elimt) = elim in
   let i = match i with None -> index_of_ind_arg elimt | Some i -> i in
   (* elimclause contains this: (elimc ?i ?j ?k...?l) *)
+  let elimc = contract_letin_in_lam_header elimc in
   let elimc = mkCast (elimc, DEFAULTcast, elimt) in
   let elimclause =
     pf_apply make_clenv_binding gl (elimc,elimt) lbindelimc in
@@ -3784,7 +3778,7 @@ let clear_unselected_context id inhyps cls gl =
       thin ids gl
   | None -> tclIDTAC gl
 
-let use_bindings env sigma elim (c,lbind) typ =
+let use_bindings env sigma elim must_be_closed (c,lbind) typ =
   let typ =
     if elim == None then
       (* w/o an scheme, the term has to be applied at least until
@@ -3803,6 +3797,8 @@ let use_bindings env sigma elim (c,lbind) typ =
   let rec find_clause typ =
     try
       let indclause = make_clenv_binding env sigma (c,typ) lbind in
+      if must_be_closed && occur_meta (clenv_value indclause) then
+        error "Need a fully applied argument.";
       (* We lose the possibility of coercions in with-bindings *)
       pose_all_metas_as_evars env indclause.evd (clenv_value indclause)
     with e when catchable_exception e ->
@@ -3848,7 +3844,7 @@ let pose_induction_arg_then isrec with_evars (is_arg_pure_hyp,from_prefix) elim
   let ccl = Proofview.Goal.raw_concl gl in
   let store = Proofview.Goal.extra gl in
   let check = check_enough_applied env sigma elim in
-  let (sigma',c) = use_bindings env sigma elim (c0,lbind) t0 in
+  let (sigma',c) = use_bindings env sigma elim false (c0,lbind) t0 in
   let abs = AbstractPattern (from_prefix,check,Name id,(pending,c),cls,false) in
   let (id,sign,_,lastlhyp,ccl,res) = make_abstraction env sigma' ccl abs in
   match res with
@@ -3868,7 +3864,8 @@ let pose_induction_arg_then isrec with_evars (is_arg_pure_hyp,from_prefix) elim
       (Tacticals.New.tclTHENLIST [
         Proofview.Unsafe.tclEVARS sigma;
         Proofview.Refine.refine ~unsafe:true (fun sigma ->
-          let (sigma,c) = use_bindings env sigma elim (c0,lbind) t0 in
+          let b = not with_evars && with_eq != None in
+          let (sigma,c) = use_bindings env sigma elim b (c0,lbind) t0 in
           let t = Retyping.get_type_of env sigma c in
           mkletin_goal env sigma store with_eq false (id,lastlhyp,ccl,c) (Some t));
         Proofview.(if with_evars then shelve_unifiable else guard_no_unifiable);
@@ -4410,11 +4407,6 @@ let tclABSTRACT name_op tac =
       add_suffix name "_subproof", gk
   in
   abstract_subproof s gk tac
-
-let admit_as_an_axiom =
-  Proofview.tclUNIT () >>= fun () -> (* delay for Coqlib.build_coq_proof_admitted *)
-  simplest_case (Coqlib.build_coq_proof_admitted ()) <*>
-  Proofview.mark_as_unsafe
 
 let unify ?(state=full_transparent_state) x y =
   Proofview.Goal.nf_enter begin fun gl ->

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -134,7 +134,7 @@ exception FullyUnfocused
 exception CannotUnfocusThisWay
 
 (* This is raised when trying to focus on non-existing subgoals. It is
-   handled by an error message but one may need to catched it and
+   handled by an error message but one may need to catch it and
    settle a better error message in some case (suggesting a better
    bullet for example), see proof_global.ml function Bullet.pop and
    Bullet.push. *)

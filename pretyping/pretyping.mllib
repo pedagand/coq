@@ -1,7 +1,4 @@
 Locusops
-Termops
-Namegen
-Evd
 Reductionops
 Vnorm
 Inductiveops
@@ -20,7 +17,7 @@ Miscops
 Glob_ops
 Redops
 Patternops
-ConstrMatching
+Constr_matching
 Tacred
 Typeclasses_errors
 Typeclasses

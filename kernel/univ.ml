@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -194,7 +194,17 @@ struct
     | Level _, _ -> -1
     | _, Level _ -> 1
     | Var n, Var m -> Int.compare n m
-      
+
+  let hequal x y =
+    x == y ||
+      match x, y with
+      | Prop, Prop -> true
+      | Set, Set -> true
+      | Level (n,d), Level (n',d') ->
+        n == n' && d == d'
+      | Var n, Var n' -> n == n'
+      | _ -> false
+
   let hcons = function
     | Prop as x -> x
     | Set as x -> x
@@ -233,27 +243,26 @@ module Level = struct
 
   let hash x = x.hash
 
-  let hcons x = 
-    let data' = RawLevel.hcons x.data in
-      if data' == x.data then x
-      else { x with data = data' }
-
   let data x = x.data
 
   (** Hashcons on levels + their hash *)
 
-  let make =
-    let module Self = struct
-      type _t = t
-      type t = _t
-      let equal = equal
-      let hash = hash
-    end in
-    let module WH = Weak.Make(Self) in
-    let pool = WH.create 4910 in fun x ->
-    let x = { hash = RawLevel.hash x; data = x } in
-    try WH.find pool x
-    with Not_found -> WH.add pool x; x
+  module Self = struct
+    type _t = t
+    type t = _t
+    type u = unit
+    let equal x y = x.hash == y.hash && RawLevel.hequal x.data y.data
+    let hash x = x.hash
+    let hashcons () x =
+      let data' = RawLevel.hcons x.data in
+      if x.data == data' then x else { x with data = data' }
+  end
+
+  let hcons =
+    let module H = Hashcons.Make(Self) in
+    Hashcons.simple_hcons H.generate H.hcons ()
+
+  let make l = hcons { hash = RawLevel.hash l; data = l }
 
   let set = make Set
   let prop = make Prop
@@ -303,6 +312,10 @@ module Level = struct
   let var n = 
     if n < 20 then vars.(n) else make (Var n)
 
+  let var_index u =
+    match data u with
+    | Var n -> Some n | _ -> None
+
   let make m n = make (Level (n, Names.DirPath.hcons m))
 
 end
@@ -339,8 +352,8 @@ end
 module LSet = struct
   include LMap.Set
 
-  let pr s =
-    str"{" ++ prlist_with_sep spc Level.pr (elements s) ++ str"}"
+  let pr prl s =
+    str"{" ++ prlist_with_sep spc prl (elements s) ++ str"}"
 
   let of_array l =
     Array.fold_left (fun acc x -> add x acc) empty l
@@ -1261,10 +1274,10 @@ struct
   module S = Set.Make(UConstraintOrd)
   include S
 
-  let pr c =
+  let pr prl c =
     fold (fun (u1,op,u2) pp_std ->
-      pp_std ++  Level.pr u1 ++ pr_constraint_type op ++
-	Level.pr u2 ++ fnl () )  c (str "")
+      pp_std ++ prl u1 ++ pr_constraint_type op ++
+	prl u2 ++ fnl () )  c (str "")
 
 end
 
@@ -1637,7 +1650,7 @@ module Instance : sig
 
     val subst_fn : universe_level_subst_fn -> t -> t
     
-    val pr : t -> Pp.std_ppcmds
+    val pr : (Level.t -> Pp.std_ppcmds) -> t -> Pp.std_ppcmds
     val levels : t -> LSet.t
     val check_eq : t check_function 
 end = 
@@ -1714,7 +1727,7 @@ struct
   let levels x = LSet.of_array x
 
   let pr =
-    prvect_with_sep spc Level.pr
+    prvect_with_sep spc
 
   let equal t u = 
     t == u ||
@@ -1744,6 +1757,8 @@ type universe_instance = Instance.t
 type 'a puniverses = 'a * Instance.t
 let out_punivs (x, y) = x
 let in_punivs x = (x, Instance.empty)
+let eq_puniverses f (x, u) (y, u') =
+  f x y && Instance.equal u u'
 
 (** A context of universe levels with universe constraints,
     representiong local universe variables and constraints *)
@@ -1758,9 +1773,9 @@ struct
   let empty = (Instance.empty, Constraint.empty)
   let is_empty (univs, cst) = Instance.is_empty univs && Constraint.is_empty cst
 
-  let pr (univs, cst as ctx) =
+  let pr prl (univs, cst as ctx) =
     if is_empty ctx then mt() else
-      Instance.pr univs ++ str " |= " ++ v 1 (Constraint.pr cst)
+      Instance.pr prl univs ++ str " |= " ++ v 0 (Constraint.pr prl cst)
 
   let hcons (univs, cst) =
     (Instance.hcons univs, hcons_constraints cst)
@@ -1826,9 +1841,9 @@ struct
   let of_context (ctx, cst) =
     (Instance.levels ctx, cst)
 
-  let pr (univs, cst as ctx) =
+  let pr prl (univs, cst as ctx) =
     if is_empty ctx then mt() else
-      LSet.pr univs ++ str " |= " ++ v 1 (Constraint.pr cst)
+      LSet.pr prl univs ++ str " |= " ++ v 0 (Constraint.pr prl cst)
 
   let constraints (univs, cst) = cst
   let levels (univs, cst) = univs
@@ -1977,7 +1992,7 @@ let abstract_universes poly ctx =
 
 (** Pretty-printing *)
 
-let pr_arc = function
+let pr_arc prl = function
   | _, Canonical {univ=u; lt=[]; le=[]} ->
       mt ()
   | _, Canonical {univ=u; lt=lt; le=le} ->
@@ -1985,20 +2000,20 @@ let pr_arc = function
       | [], _ | _, [] -> mt ()
       | _ -> spc ()
       in
-      Level.pr u ++ str " " ++
+      prl u ++ str " " ++
       v 0
-        (pr_sequence (fun v -> str "< " ++ Level.pr v) lt ++
+        (pr_sequence (fun v -> str "< " ++ prl v) lt ++
 	 opt_sep ++
-         pr_sequence (fun v -> str "<= " ++ Level.pr v) le) ++
+         pr_sequence (fun v -> str "<= " ++ prl v) le) ++
       fnl ()
   | u, Equiv v ->
-      Level.pr u  ++ str " = " ++ Level.pr v ++ fnl ()
+      prl u  ++ str " = " ++ prl v ++ fnl ()
 
-let pr_universes g =
+let pr_universes prl g =
   let graph = UMap.fold (fun u a l -> (u,a)::l) g [] in
-  prlist pr_arc graph
+  prlist (pr_arc prl) graph
 
-let pr_constraints = Constraint.pr
+let pr_constraints prl = Constraint.pr prl
 
 let pr_universe_context = UContext.pr
 
@@ -2043,21 +2058,22 @@ let hcons_universe_context_set (v, c) =
 
 let hcons_univ x = Universe.hcons x
 
-let explain_universe_inconsistency (o,u,v,p) =
-    let pr_rel = function
-      | Eq -> str"=" | Lt -> str"<" | Le -> str"<=" 
-    in
-    let reason = match p with
-      | None | Some [] -> mt()
-      | Some p ->
-	str " because" ++ spc() ++ pr_uni v ++
-	  prlist (fun (r,v) -> spc() ++ pr_rel r ++ str" " ++ pr_uni v)
-	  p ++
-	  (if Universe.equal (snd (List.last p)) u then mt() else
-	      (spc() ++ str "= " ++ pr_uni u)) 
-    in
-      str "Cannot enforce" ++ spc() ++ pr_uni u ++ spc() ++
-        pr_rel o ++ spc() ++ pr_uni v ++ reason ++ str")"
+let explain_universe_inconsistency prl (o,u,v,p) =
+  let pr_uni = Universe.pr_with prl in
+  let pr_rel = function
+    | Eq -> str"=" | Lt -> str"<" | Le -> str"<=" 
+  in
+  let reason = match p with
+    | None | Some [] -> mt()
+    | Some p ->
+      str " because" ++ spc() ++ pr_uni v ++
+	prlist (fun (r,v) -> spc() ++ pr_rel r ++ str" " ++ pr_uni v)
+	p ++
+	(if Universe.equal (snd (List.last p)) u then mt() else
+	    (spc() ++ str "= " ++ pr_uni u)) 
+  in
+    str "Cannot enforce" ++ spc() ++ pr_uni u ++ spc() ++
+      pr_rel o ++ spc() ++ pr_uni v ++ reason
 
 let compare_levels = Level.compare
 let eq_levels = Level.equal

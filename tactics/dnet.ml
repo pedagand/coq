@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -39,6 +39,7 @@ sig
   val inter : t -> t -> t
   val union : t -> t -> t
   val map : (ident -> ident) -> (unit structure -> unit structure) -> t -> t
+  val map_metas : (meta -> meta) -> t -> t
 end
 
 module Make =
@@ -121,7 +122,7 @@ struct
 	     Idset.union acc s2
 	 ) t Idset.empty)
 
-(*   (\* optimization hack: Not_found is catched in fold_pattern *\) *)
+(*   (\* optimization hack: Not_found is caught in fold_pattern *\) *)
 (*   let fast_inter s1 s2 = *)
 (*     if Idset.is_empty s1 || Idset.is_empty s2 then raise Not_found *)
 (*     else Idset.inter s1 s2 *)
@@ -176,7 +177,7 @@ struct
     let is_empty : t -> bool = function 
       | None -> false
       | Some s -> S.is_empty s
-    (* optimization hack: Not_found is catched in fold_pattern *)
+    (* optimization hack: Not_found is caught in fold_pattern *)
     let fast_inter s1 s2 =
       if is_empty s1 || is_empty s2 then raise Not_found
       else let r = inter s1 s2 in 
@@ -287,5 +288,14 @@ struct
       | Terminal (e,is) -> Terminal (e,idset_map sidset is)
       | Node e -> Node (T.map (map sidset sterm) e) in
     Nodes (tmap_map sterm snode t, Mmap.map (idset_map sidset) m)
+
+  let rec map_metas f (Nodes (t, m)) : t =
+    let f_node = function
+      | Terminal (e, is) -> Terminal (T.map (map_metas f) e, is)
+      | Node e -> Node (T.map (map_metas f) e)
+    in
+    let m' = Mmap.fold (fun m s acc -> Mmap.add (f m) s acc) m Mmap.empty in
+    let t' = Tmap.fold (fun k n acc -> Tmap.add k (f_node n) acc) t Tmap.empty in
+    Nodes (t', m')
 
 end

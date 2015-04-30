@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -33,7 +33,7 @@ let genarg_of_ipattern pat = in_gen (rawwit Constrarg.wit_intro_pattern) pat
 
 GEXTEND Gram
   GLOBAL: tactic tacdef_body tactic_expr binder_tactic tactic_arg
-          constr_may_eval;
+          constr_may_eval constr_eval;
 
   tactic_then_last:
     [ [ "|"; lta = LIST0 OPT tactic_expr SEP "|" ->
@@ -153,8 +153,12 @@ GEXTEND Gram
       | IDENT "type_term"; c=uconstr -> TacPretype c
       | IDENT "numgoals" -> TacNumgoals ] ]
   ;
+  (* If a qualid is given, use its short name. TODO: have the shortest
+     non ambiguous name where dots are replaced by "_"? Probably too
+     verbose most of the time. *)
   fresh_id:
-    [ [ s = STRING -> ArgArg s | id = ident -> ArgVar (!@loc,id) ] ]
+    [ [ s = STRING -> ArgArg s (*| id = ident -> ArgVar (!@loc,id)*)
+	| qid = qualid -> let (_pth,id) = Libnames.repr_qualid (snd qid) in ArgVar (!@loc,id) ] ]
   ;
   constr_eval:
     [ [ IDENT "eval"; rtc = red_expr; "in"; c = Constr.constr ->

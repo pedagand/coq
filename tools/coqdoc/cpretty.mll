@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -405,7 +405,7 @@ let set_kw =
 
 let gallina_kw_to_hide =
     "Implicit" space+ "Arguments"
-  | "Ltac"
+  | ("Local" space+)? "Ltac"
   | "Require"
   | "Import"
   | "Export"
@@ -456,13 +456,7 @@ rule coq_bol = parse
       { begin_show (); coq_bol lexbuf }
   | space* end_show
       { end_show (); coq_bol lexbuf }
-  | space* ("Local"|"Global")
-      {
-	in_proof := None;
-	let s = lexeme lexbuf in
-	output_indented_keyword s lexbuf;
-	coq_bol lexbuf }
-  | space* gallina_kw_to_hide
+  | space* (("Local"|"Global") space+)? gallina_kw_to_hide
       { let s = lexeme lexbuf in
 	  if !Cdglobals.light && section_or_end s then
 	    let eol = skip_to_dot lexbuf in
@@ -596,7 +590,7 @@ and coq = parse
 	end }
   | eof
       { () }
-  | gallina_kw_to_hide
+  | (("Local"|"Global") space+)? gallina_kw_to_hide
       { let s = lexeme lexbuf in
 	  if !Cdglobals.light && section_or_end s then
 	    begin
@@ -893,11 +887,15 @@ and doc indents = parse
 and escaped_math_latex = parse
   | "$" { Output.stop_latex_math () }
   | eof { Output.stop_latex_math () }
+  | "*)"
+        { Output.stop_latex_math (); backtrack lexbuf }
   | _   { Output.latex_char (lexeme_char lexbuf 0); escaped_math_latex lexbuf }
 
 and escaped_latex = parse
   | "%" { () }
   | eof { () }
+  | "*)"
+        { backtrack lexbuf }
   | _   { Output.latex_char (lexeme_char lexbuf 0); escaped_latex lexbuf }
 
 and escaped_html = parse
@@ -907,6 +905,8 @@ and escaped_html = parse
   | "##"
         { Output.html_char '#'; escaped_html lexbuf }
   | eof { () }
+  | "*)"
+        { backtrack lexbuf }
   | _   { Output.html_char (lexeme_char lexbuf 0); escaped_html lexbuf }
 
 and verbatim inline = parse

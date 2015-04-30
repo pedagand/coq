@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -135,7 +135,7 @@ type search_restriction =
 
 type rec_flag       = bool (* true = Rec;           false = NoRec          *)
 type verbose_flag   = bool (* true = Verbose;       false = Silent         *)
-type opacity_flag   = bool (* true = Opaque;        false = Transparent    *)
+type opacity_flag   = Opaque of lident list option | Transparent
 type coercion_flag  = bool (* true = AddCoercion    false = NoCoercion     *)
 type instance_flag  = bool option
   (* Some true = Backward instance; Some false = Forward instance, None = NoInstance *)
@@ -316,7 +316,7 @@ type vernac_expr =
   | VernacBeginSection of lident
   | VernacEndSegment of lident
   | VernacRequire of
-      export_flag option * lreference list
+      lreference option * export_flag option * lreference list
   | VernacImport of export_flag * lreference list
   | VernacCanonical of reference or_by_notation
   | VernacCoercion of obsolete_locality * reference or_by_notation *

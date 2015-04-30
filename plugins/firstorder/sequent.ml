@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -209,7 +209,7 @@ open Hints
 let extend_with_auto_hints l seq gl=
   let seqref=ref seq in
   let f p_a_t =
-    match p_a_t.code with
+    match repr_auto_tactic p_a_t.code with
 	Res_pf (c,_) | Give_exact (c,_)
       | Res_pf_THEN_trivial_fail (c,_) ->
 	  (try

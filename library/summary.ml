@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -66,6 +66,7 @@ let freeze_summaries ~marshallable : frozen =
   let fold id (_, decl) accu =
     (* to debug missing Lazy.force
     if marshallable <> `No then begin
+      let id, _ = Int.Map.find id !summaries in
       prerr_endline ("begin marshalling " ^ id);
       ignore(Marshal.to_string (decl.freeze_function marshallable) []);
       prerr_endline ("end marshalling " ^ id);

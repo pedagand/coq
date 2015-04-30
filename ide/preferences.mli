@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -32,6 +32,7 @@ type pref =
 
       mutable read_project : project_behavior;
       mutable project_file_name : string;
+      mutable project_path : string option;
 
       mutable encoding : inputenc;
 
@@ -71,6 +72,7 @@ type pref =
       mutable processing_color : string;
       mutable processed_color : string;
       mutable error_color : string;
+      mutable error_fg_color : string;
 
       mutable dynamic_word_wrap : bool;
       mutable show_line_number : bool;

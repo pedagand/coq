@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -8,7 +8,6 @@
 
 open Pp
 open Genarg
-open Names
 open Constrexpr
 open Tacexpr
 open Ppextend
@@ -60,19 +59,19 @@ module type Pp = sig
     (constr_expr -> std_ppcmds) -> (constr_expr -> std_ppcmds) ->
     (tolerability -> raw_tactic_expr -> std_ppcmds) ->
     (constr_expr -> std_ppcmds) -> int ->
-    ml_tactic_name -> raw_generic_argument list -> std_ppcmds
+    ml_tactic_entry -> raw_generic_argument list -> std_ppcmds
 
   val pr_glob_extend:
     (glob_constr_and_expr -> std_ppcmds) -> (glob_constr_and_expr -> std_ppcmds) ->
     (tolerability -> glob_tactic_expr -> std_ppcmds) ->
     (glob_constr_pattern_and_expr -> std_ppcmds) -> int ->
-    ml_tactic_name -> glob_generic_argument list -> std_ppcmds
+    ml_tactic_entry -> glob_generic_argument list -> std_ppcmds
 
   val pr_extend :
     (Term.constr -> std_ppcmds) -> (Term.constr -> std_ppcmds) ->
     (tolerability -> glob_tactic_expr -> std_ppcmds) ->
     (constr_pattern -> std_ppcmds) -> int ->
-    ml_tactic_name -> typed_generic_argument list -> std_ppcmds
+    ml_tactic_entry -> typed_generic_argument list -> std_ppcmds
 
   val pr_ltac_constant : Nametab.ltac_constant -> std_ppcmds
 

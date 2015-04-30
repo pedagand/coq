@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -123,7 +123,7 @@ let annotate phrase =
     let pa = Pcoq.Gram.parsable (Stream.of_string phrase) in
     Vernac.parse_sentence (pa,None)
   in
-  let (_, _, xml) =
+  let (_, xml) =
     Richprinter.richpp_vernac ast
   in
   xml
@@ -327,14 +327,14 @@ let handle_exn (e, info) =
   let loc_of e = match Loc.get_loc e with
     | Some loc when not (Loc.is_ghost loc) -> Some (Loc.unloc loc)
     | _ -> None in
-  let mk_msg e = read_stdout ()^"\n"^string_of_ppcmds (Errors.print e) in
+  let mk_msg () = read_stdout ()^"\n"^string_of_ppcmds (Errors.print ~info e) in
   match e with
   | Errors.Drop -> dummy, None, "Drop is not allowed by coqide!"
   | Errors.Quit -> dummy, None, "Quit is not allowed by coqide!"
   | e ->
       match Stateid.get info with
-      | Some (valid, _) -> valid, loc_of info, mk_msg e
-      | None -> dummy, loc_of info, mk_msg e
+      | Some (valid, _) -> valid, loc_of info, mk_msg ()
+      | None -> dummy, loc_of info, mk_msg ()
 
 let init =
   let initialized = ref false in

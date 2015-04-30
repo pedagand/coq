@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -572,6 +572,7 @@ Lemma Alembert_C6 :
     (forall n:nat, An n <> 0) ->
     Un_cv (fun n:nat => Rabs (An (S n) / An n)) k ->
     Rabs x < / k -> { l:R | Pser An x l }.
+Proof.
   intros.
   cut { l:R | Un_cv (fun N:nat => sum_f_R0 (fun i:nat => An i * x ^ i) N) l }.
   intro X.

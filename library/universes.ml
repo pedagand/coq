@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -22,6 +22,9 @@ let global_universes = Summary.ref ~name:"Global universe names"
 let global_universe_names () = !global_universes
 let set_global_universe_names s = global_universes := s
 
+let pr_with_global_universes l = 
+  try Nameops.pr_id (LMap.find l (snd !global_universes))
+  with Not_found -> Level.pr l
 
 type universe_constraint_type = ULe | UEq | ULub
 
@@ -162,7 +165,7 @@ let leq_constr_univs_infer univs m n =
       m == n ||	Constr.compare_head_gen eq_universes eq_sorts eq_constr' m n
     in
     let rec compare_leq m n =
-      Constr.compare_head_gen_leq eq_universes eq_sorts leq_sorts 
+      Constr.compare_head_gen_leq eq_universes leq_sorts 
 	eq_constr' leq_constr' m n
     and leq_constr' m n = m == n || compare_leq m n in
     let res = compare_leq m n in
@@ -210,7 +213,7 @@ let leq_constr_universes m n =
       m == n ||	Constr.compare_head_gen eq_universes eq_sorts eq_constr' m n
     in
     let rec compare_leq m n =
-      Constr.compare_head_gen_leq eq_universes eq_sorts leq_sorts eq_constr' leq_constr' m n
+      Constr.compare_head_gen_leq eq_universes leq_sorts eq_constr' leq_constr' m n
     and leq_constr' m n = m == n || compare_leq m n in
     let res = compare_leq m n in
       res, !cstrs
@@ -769,7 +772,7 @@ let minimize_univ_variables ctx us algs left right cstrs =
 	      else 
 		try let lev = Option.get (Universe.level inst) in
 		      Constraint.add (lev, d, r) cstrs
-		with Option.IsNone -> assert false)
+		with Option.IsNone -> failwith "")
 	      cstrs dangling
 	    in
 	      (ctx', us, algs, insts, cstrs'), b
@@ -781,7 +784,8 @@ let minimize_univ_variables ctx us algs left right cstrs =
 	  | None -> (* Nothing to do *)
 	    acc' (acc, (true, false, Universe.make u))
 	  | Some lbound ->
-	    acc' (instantiate_lbound lbound)
+	     try acc' (instantiate_lbound lbound) 
+	     with Failure _ -> acc' (acc, (true, false, Universe.make u))
   and aux (ctx', us, algs, seen, cstrs as acc) u =
     try acc, LMap.find u seen 
     with Not_found -> instance acc u

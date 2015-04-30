@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -166,3 +166,16 @@ let find_nearest_backward (cursor:GText.iter) targets =
       | None -> raise Not_found
       | Some nearest -> nearest
 
+(** On double-click on a view, select the whole word. This is a workaround for
+    a deficient word handling in TextView. *)
+let fix_double_click self =
+  let callback ev = match GdkEvent.get_type ev with
+  | `TWO_BUTTON_PRESS ->
+    let iter = self#buffer#get_iter `INSERT in
+    let start, stop = get_word_around iter in
+    let () = self#buffer#move_mark `INSERT ~where:start in
+    let () = self#buffer#move_mark `SEL_BOUND ~where:stop in
+    true
+  | _ -> false
+  in
+  ignore (self#event#connect#button_press ~callback)

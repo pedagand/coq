@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -93,12 +93,11 @@ let construct_of_constr_const env tag typ =
 
 let construct_of_constr_block = construct_of_constr false
 
-(* FIXME: treatment of universes *)
 let constr_type_of_idkey env idkey =
   match idkey with
   | ConstKey cst ->
-    let const_type = (Environ.lookup_constant cst env).const_type in
-      mkConst cst, Typeops.type_of_constant_type env const_type
+    let const_type = Typeops.type_of_constant_in env cst in
+      mkConstU cst, const_type
   | VarKey id ->
       let (_,_,ty) = lookup_named id env in
       mkVar id, ty
@@ -107,7 +106,7 @@ let constr_type_of_idkey env idkey =
       let (_,_,ty) = lookup_rel n env in
       mkRel n, lift n ty
 
-let type_of_ind env ind u =
+let type_of_ind env (ind, u) =
   type_of_inductive env (Inductive.lookup_mind_specif env ind, u)
 
 let build_branches_type env (mind,_ as _ind) mib mip u params dep p =
@@ -167,8 +166,15 @@ and nf_whd env whd typ =
       mkApp(cfd,args)
   | Vconstr_const n -> construct_of_constr_const env n typ
   | Vconstr_block b ->
-      let capp,ctyp = construct_of_constr_block env (btag b) typ in
-      let args = nf_bargs env b ctyp in
+      let tag = btag b in
+      let (tag,ofs) =
+        if tag = Cbytecodes.last_variant_tag then
+	  match whd_val (bfield b 0) with
+	  | Vconstr_const tag -> (tag+Cbytecodes.last_variant_tag, 1)
+	  | _ -> assert false
+        else (tag, 0) in
+      let capp,ctyp = construct_of_constr_block env tag typ in
+      let args = nf_bargs env b ofs ctyp in
       mkApp(capp,args)
   | Vatom_stk(Aid idkey, stk) ->
       let c,typ = constr_type_of_idkey env idkey in
@@ -176,7 +182,7 @@ and nf_whd env whd typ =
   | Vatom_stk(Aiddef(idkey,v), stk) ->
       nf_whd env (whd_stack v stk) typ
   | Vatom_stk(Aind ind, stk) ->
-      nf_stk env (mkInd ind) (type_of_ind env ind Univ.Instance.empty (*FIXME*)) stk
+      nf_stk env (mkIndU ind) (type_of_ind env ind) stk
 
 and nf_stk env c t stk  =
   match stk with
@@ -194,9 +200,9 @@ and nf_stk env c t stk  =
       let nparams = mib.mind_nparams in
       let params,realargs = Util.Array.chop nparams allargs in
       let pT =
-	hnf_prod_applist env (type_of_ind env ind u) (Array.to_list params) in
+	hnf_prod_applist env (type_of_ind env (ind,u)) (Array.to_list params) in
       let pT = whd_betadeltaiota env pT in
-      let dep, p = nf_predicate env ind mip params (type_of_switch sw) pT in
+      let dep, p = nf_predicate env (ind,u) mip params (type_of_switch sw) pT in
       (* Calcul du type des branches *)
       let btypes = build_branches_type env ind mib mip u params dep p in
       (* calcul des branches *)
@@ -227,7 +233,7 @@ and nf_predicate env ind mip params v pT =
       let n = mip.mind_nrealargs in
       let rargs = Array.init n (fun i -> mkRel (n-i)) in
       let params = if Int.equal n 0 then params else Array.map (lift n) params in
-      let dom = mkApp(mkInd ind,Array.append params rargs) in
+      let dom = mkApp(mkIndU ind,Array.append params rargs) in
       let body = nf_vtype (push_rel (name,None,dom) env) vb in
       true, mkLambda(name,dom,body)
   | _, _ -> false, nf_val env v crazy_type
@@ -243,14 +249,14 @@ and nf_args env vargs t =
 	t := subst1 c codom; c) in
   !t,args
 
-and nf_bargs env b t =
+and nf_bargs env b ofs t =
   let t = ref t in
-  let len = bsize b in
+  let len = bsize b - ofs in
   let args =
     Array.init len
       (fun i ->
 	let _,dom,codom = decompose_prod env !t in
-	let c = nf_val env (bfield b i) dom in
+	let c = nf_val env (bfield b (i+ofs)) dom in
 	t := subst1 c codom; c) in
   args
 

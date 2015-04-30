@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -956,7 +956,7 @@ let extern_type goal_concl_style env sigma t =
   let r = Detyping.detype goal_concl_style avoid env sigma t in
   extern_glob_type (vars_of_env env) r
 
-let extern_sort s = extern_glob_sort (detype_sort s)
+let extern_sort sigma s = extern_glob_sort (detype_sort sigma s)
 
 let extern_closed_glob ?lax goal_concl_style env sigma t =
   let avoid = if goal_concl_style then ids_of_context env else [] in
@@ -977,7 +977,7 @@ let rec glob_of_pat env sigma = function
   | PRef ref -> GRef (loc,ref,None)
   | PVar id -> GVar (loc,id)
   | PEvar (evk,l) ->
-      let test id = function PVar id' -> Id.equal id id' | _ -> false in
+      let test (id,_,_) = function PVar id' -> Id.equal id id' | _ -> false in
       let l = Evd.evar_instance_array test (Evd.find sigma evk) l in
       let id = Evd.evar_ident evk sigma in
       GEvar (loc,id,List.map (on_snd (glob_of_pat env sigma)) l)

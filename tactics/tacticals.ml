@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -16,7 +16,6 @@ open Context
 open Declarations
 open Tacmach
 open Clenv
-open Misctypes
 
 (************************************************************************)
 (* Tacticals re-exported from the Refiner module                        *)
@@ -494,26 +493,23 @@ module New = struct
       let (loc,_) = evi.Evd.evar_source in
       Pretype_errors.error_unsolvable_implicit loc env sigma evk None
 
-  let tclWITHHOLES accept_unresolved_holes tac sigma x =
+  let tclWITHHOLES accept_unresolved_holes tac sigma =
     tclEVARMAP >>= fun sigma_initial ->
-      if sigma == sigma_initial then tac x
+      if sigma == sigma_initial then tac
       else
-        let check_evars env new_sigma sigma initial_sigma =
-          try
-            check_evars env new_sigma sigma initial_sigma;
-            tclUNIT ()
-          with e when Errors.noncritical e ->
-            tclZERO e
-        in
-        let check_evars_if =
+        let check_evars_if x =
           if not accept_unresolved_holes then
             tclEVARMAP >>= fun sigma_final ->
               tclENV >>= fun env ->
-                check_evars env sigma_final sigma sigma_initial
+                try
+                  let () = check_evars env sigma_final sigma sigma_initial in
+                  tclUNIT x
+                with e when Errors.noncritical e ->
+                  tclZERO e
           else
-            tclUNIT ()
+            tclUNIT x
         in
-        Proofview.Unsafe.tclEVARS sigma <*> tac x <*> check_evars_if
+        Proofview.Unsafe.tclEVARS sigma <*> tac >>= check_evars_if
 
   let tclTIMEOUT n t =
     Proofview.tclOR

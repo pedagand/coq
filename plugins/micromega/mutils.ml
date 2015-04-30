@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -64,6 +64,15 @@ let all_sym_pairs f l =
     match l with
       | [] -> acc
       | e::l -> xpairs (pair_with acc e l) l in
+    xpairs [] l
+
+let all_pairs f l = 
+  let pair_with acc e l = List.fold_left (fun acc x -> (f e x) ::acc) acc l in
+
+  let rec xpairs acc l = 
+    match l with
+      | [] -> acc
+      | e::lx -> xpairs (pair_with acc e l) lx in
     xpairs [] l
 
 

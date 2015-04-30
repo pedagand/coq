@@ -1,3 +1,4 @@
+Require Import TestSuite.admit.
 (* File reduced by coq-bug-finder from original input, then from 12105 lines to 142 lines, then from 83 lines to 57 lines *)
 Generalizable All Variables.
 Axiom admit : forall {T}, T.
@@ -24,9 +25,8 @@ Proof.
   intros.
   refine (isequiv_adjointify (functor_forall f g)
                              (functor_forall (f^-1)
-                                             (fun (x:A) (y:Q (f^-1 x)) => @eisretr _ _ f _ x # (g (f^-1 x))^-1 y
-                             )) _ _);
-  intros h.
+                                             (fun (x:A) (y:Q (f^-1 x)) => @eisretr _ _ f H x # (g (f^-1 x))^-1 y
+                             )) _ _); intros h.
   - abstract (
         apply path_forall; intros b; unfold functor_forall;
         rewrite eisadj;

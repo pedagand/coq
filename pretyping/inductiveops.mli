@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -25,7 +25,9 @@ val type_of_constructors : env -> pinductive -> types array
 (** Return constructor types in normal form *)
 val arities_of_constructors : env -> pinductive -> types array
 
-(** An inductive type with its parameters *)
+(** An inductive type with its parameters (transparently supports
+    reasoning either with only recursively uniform parameters or with all
+    parameters including the recursively non-uniform ones *)
 type inductive_family
 val make_ind_family : inductive puniverses * constr list -> inductive_family
 val dest_ind_family : inductive_family -> inductive puniverses * constr list
@@ -138,9 +140,13 @@ val lift_constructor : int -> constructor_summary -> constructor_summary
 val get_constructor :
   pinductive * mutual_inductive_body * one_inductive_body * constr list ->
   int -> constructor_summary
-val get_arity        : env -> inductive_family -> rel_context * sorts_family
 val get_constructors : env -> inductive_family -> constructor_summary array
 val get_projections  : env -> inductive_family -> constant array option
+
+(** [get_arity] returns the arity of the inductive family instantiated
+    with the parameters; if recursively non-uniform parameters are not
+    part of the inductive family, they appears in the arity *)
+val get_arity        : env -> inductive_family -> rel_context * sorts_family
 
 val build_dependent_constructor : constructor_summary -> constr
 val build_dependent_inductive   : env -> inductive_family -> constr
