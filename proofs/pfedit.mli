@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -156,6 +156,14 @@ val build_constant_by_tactic :
 val build_by_tactic : env -> Evd.evar_universe_context -> ?poly:polymorphic -> 
   types -> unit Proofview.tactic -> 
   constr * bool * Evd.evar_universe_context
+
+val refine_by_tactic : env -> Evd.evar_map -> types -> unit Proofview.tactic ->
+  constr * Evd.evar_map
+(** A variant of the above function that handles open terms as well.
+    Caveat: all effects are purged in the returned term at the end, but other
+    evars solved by side-effects are NOT purged, so that unexpected failures may
+    occur. Ideally all code using this function should be rewritten in the
+    monad. *)
 
 (** Declare the default tactic to fill implicit arguments *)
 

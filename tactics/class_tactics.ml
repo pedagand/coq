@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -17,7 +17,6 @@ open Proof_type
 open Tacticals
 open Tacmach
 open Tactics
-open Patternops
 open Clenv
 open Typeclasses
 open Globnames
@@ -32,20 +31,65 @@ open Hints
 let typeclasses_debug = ref false
 let typeclasses_depth = ref None
 
+let typeclasses_modulo_eta = ref false
+let set_typeclasses_modulo_eta d = (:=) typeclasses_modulo_eta d
+let get_typeclasses_modulo_eta () = !typeclasses_modulo_eta
+
+let typeclasses_dependency_order = ref false
+let set_typeclasses_dependency_order d = (:=) typeclasses_dependency_order d
+let get_typeclasses_dependency_order () = !typeclasses_dependency_order
+
+open Goptions
+
+let _ =
+  declare_bool_option
+    { optsync  = true;
+      optdepr  = false;
+      optname  = "do typeclass search modulo eta conversion";
+      optkey   = ["Typeclasses";"Modulo";"Eta"];
+      optread  = get_typeclasses_modulo_eta;
+      optwrite = set_typeclasses_modulo_eta; }
+
+let _ =
+  declare_bool_option
+    { optsync  = true;
+      optdepr  = false;
+      optname  = "during typeclass resolution, solve instances according to their dependency order";
+      optkey   = ["Typeclasses";"Dependency";"Order"];
+      optread  = get_typeclasses_dependency_order;
+      optwrite = set_typeclasses_dependency_order; }
+
 (** We transform the evars that are concerned by this resolution
     (according to predicate p) into goals.
     Invariant: function p only manipulates and returns undefined evars *)
+
+let top_sort evm undefs =
+  let l' = ref [] in
+  let tosee = ref undefs in
+  let rec visit ev evi = 
+    let evs = Evarutil.undefined_evars_of_evar_info evm evi in
+      Evar.Set.iter (fun ev -> 
+	if Evar.Map.mem ev !tosee then 
+	  visit ev (Evar.Map.find ev !tosee)) evs;
+      tosee := Evar.Map.remove ev !tosee;
+      l' := ev :: !l';
+  in
+    while not (Evar.Map.is_empty !tosee) do
+      let ev, evi = Evar.Map.min_binding !tosee in
+	visit ev evi
+    done;
+    List.rev !l'
 
 let evars_to_goals p evm =
   let goals = ref Evar.Map.empty in
   let map ev evi =
     let evi, goal = p evm ev evi in
-    let () = if goal then goals := Evar.Map.add ev ev !goals in
+    let () = if goal then goals := Evar.Map.add ev evi !goals in
     evi
   in
   let evm = Evd.raw_map_undefined map evm in
   if Evar.Map.is_empty !goals then None
-  else Some (Evar.Map.bindings !goals, evm)
+  else Some (!goals, evm)
 
 (** Typeclasses instance search tactic / eauto *)
 
@@ -65,7 +109,7 @@ let auto_core_unif_flags st freeze = {
   frozen_evars = freeze;
   restrict_conv_on_strict_subterms = false; (* ? *)
   modulo_betaiota = true;
-  modulo_eta = false;
+  modulo_eta = !typeclasses_modulo_eta;
 }
 
 let auto_unif_flags freeze st = 
@@ -140,7 +184,7 @@ let with_prods nprods poly (c, clenv) f gls =
 
 let rec e_trivial_fail_db db_list local_db goal =
   let tacl =
-    Eauto.registered_e_assumption ::
+    Proofview.V82.of_tactic Eauto.registered_e_assumption ::
     (tclTHEN (Proofview.V82.of_tactic Tactics.intro)
        (function g'->
 	  let d = pf_last_hyp g' in
@@ -177,20 +221,19 @@ and e_my_find_search db_list local_db hdc complete sigma concl =
   in
   let tac_of_hint =
     fun (flags, {pri = b; pat = p; poly = poly; code = t; name = name}) ->
-      let tac =
-	match t with
-	  | Res_pf (term,cl) -> with_prods nprods poly (term,cl) (unify_resolve poly flags)
-	  | ERes_pf (term,cl) -> with_prods nprods poly (term,cl) (unify_e_resolve poly flags)
-	  | Give_exact c -> e_give_exact flags poly c
-	  | Res_pf_THEN_trivial_fail (term,cl) ->
-              tclTHEN (with_prods nprods poly (term,cl) (unify_e_resolve poly flags))
-	        (if complete then tclIDTAC else e_trivial_fail_db db_list local_db)
-	  | Unfold_nth c -> tclWEAK_PROGRESS (unfold_in_concl [AllOccurrences,c])
-	  | Extern tacast ->
-	    Proofview.V82.of_tactic (conclPattern concl p tacast)
+      let tac = function
+      | Res_pf (term,cl) -> Proofview.V82.tactic (with_prods nprods poly (term,cl) (unify_resolve poly flags))
+      | ERes_pf (term,cl) -> Proofview.V82.tactic (with_prods nprods poly (term,cl) (unify_e_resolve poly flags))
+      | Give_exact c -> Proofview.V82.tactic (e_give_exact flags poly c)
+      | Res_pf_THEN_trivial_fail (term,cl) ->
+          Proofview.V82.tactic (tclTHEN (with_prods nprods poly (term,cl) (unify_e_resolve poly flags))
+            (if complete then tclIDTAC else e_trivial_fail_db db_list local_db))
+      | Unfold_nth c -> Proofview.V82.tactic (tclWEAK_PROGRESS (unfold_in_concl [AllOccurrences,c]))
+      | Extern tacast -> conclPattern concl p tacast
       in
+      let tac = Proofview.V82.of_tactic (run_auto_tactic t tac) in
       let tac = if complete then tclCOMPLETE tac else tac in
-	match t with
+	match repr_auto_tactic t with
 	| Extern _ -> (tac,b,true, name, lazy (pr_autotactic t))
 	| _ ->
 (* 	  let tac gl = with_pattern (pf_env gl) (project gl) flags p concl tac gl in *)
@@ -306,7 +349,9 @@ let make_autogoal_hints =
       let sign = pf_filtered_hyps g in
       let (onlyc, sign', cached_hints) = !cache in
 	if onlyc == only_classes && 
-	  (sign == sign' || Environ.eq_named_context_val sign sign') then
+	  (sign == sign' || Environ.eq_named_context_val sign sign') 
+	  && Hint_db.transparent_state cached_hints == st
+	then
 	  cached_hints
 	else
 	  let hints = make_hints g st only_classes (Environ.named_context_of_val sign) in
@@ -393,8 +438,14 @@ let hints_tac hints =
 		match sgls with
 		| None -> gls', s'
 		| Some (evgls, s') ->
-		  (* Reorder with dependent subgoals. *)
-		  (gls' @ List.map (fun (ev, x) -> Some ev, x) evgls, s')
+		  if not !typeclasses_dependency_order then
+		    (gls' @ List.map (fun (ev,_) -> (Some ev, ev)) (Evar.Map.bindings evgls), s')
+		  else 
+ 		    (* Reorder with dependent subgoals. *)
+		    let evm = List.fold_left 
+		      (fun acc g -> Evar.Map.add g (Evd.find_undefined s' g) acc) evgls gls in
+		    let gls = top_sort s' evm in
+		      (List.map (fun ev -> Some ev, ev) gls, s')
 	    in
 	    let gls' = List.map_i
 	      (fun j (evar, g) ->
@@ -500,7 +551,7 @@ let make_autogoals ?(only_classes=true) ?(unique=false)
   let cut = cut_of_hints hints in
   { it = List.map_i (fun i g ->
     let (gl, auto) = make_autogoal ~only_classes ~unique 
-      ~st cut (Some (fst g)) {it = snd g; sigma = evm'; } in
+      ~st cut (Some g) {it = g; sigma = evm'; } in
       (gl, { auto with auto_depth = [i]})) 1 gs; sigma = evm'; }
 
 let get_result r =
@@ -512,12 +563,17 @@ let run_on_evars ?(only_classes=true) ?(unique=false) ?(st=full_transparent_stat
   match evars_to_goals p evm with
   | None -> None (* This happens only because there's no evar having p *)
   | Some (goals, evm') ->
-      let res = run_list_tac tac p goals 
-	(make_autogoals ~only_classes ~unique ~st hints goals evm') in
-	match get_result res with
-	| None -> raise Not_found
-	| Some (evm', fk) -> 
-	  Some (evars_reset_evd ~with_conv_pbs:true ~with_univs:false evm' evm, fk)
+    let goals = 
+      if !typeclasses_dependency_order then
+	top_sort evm' goals
+      else List.map (fun (ev, _) -> ev) (Evar.Map.bindings goals)
+    in
+    let res = run_list_tac tac p goals 
+      (make_autogoals ~only_classes ~unique ~st hints goals evm') in
+      match get_result res with
+      | None -> raise Not_found
+      | Some (evm', fk) -> 
+	Some (evars_reset_evd ~with_conv_pbs:true ~with_univs:false evm' evm, fk)
 
 let eauto_tac hints =
   then_tac normevars_tac (or_tac (hints_tac hints) intro_tac)

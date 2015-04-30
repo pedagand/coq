@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -139,6 +139,10 @@ val level_of_notation : notation -> level (** raise [Not_found] if no level *)
 
 val interp_notation_as_global_reference : Loc.t -> (global_reference -> bool) ->
       notation -> delimiters option -> global_reference
+
+(** Checks for already existing notations *)
+val exists_notation_in_scope : scope_name option -> notation ->
+      interpretation -> bool
 
 (** Declares and looks for scopes associated to arguments of a global ref *)
 val declare_arguments_scope :

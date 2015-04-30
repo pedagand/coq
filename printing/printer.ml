@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -11,7 +11,6 @@ open Errors
 open Util
 open Names
 open Term
-open Vars
 open Environ
 open Globnames
 open Nametab
@@ -143,17 +142,12 @@ let pr_constr_pattern t =
   let (sigma, env) = get_current_context () in
   pr_constr_pattern_env env sigma t
 
-let pr_sort s = pr_glob_sort (extern_sort s)
+let pr_sort sigma s = pr_glob_sort (extern_sort sigma s)
 
 let _ = Termops.set_print_constr 
   (fun env t -> pr_lconstr_expr (extern_constr ~lax:true false env Evd.empty t))
 
 let pr_in_comment pr x = str "(* " ++ pr x ++ str " *)"
-let pr_univ_cstr (c:Univ.constraints) =
-  if !Detyping.print_universes && not (Univ.Constraint.is_empty c) then
-    fnl()++pr_in_comment (fun c -> v 0 (Univ.pr_constraints c)) c
-  else
-    mt()
 
 (** Term printers resilient to [Nametab] errors *)
 
@@ -216,7 +210,8 @@ let safe_pr_constr t =
 
 let pr_universe_ctx c =
   if !Detyping.print_universes && not (Univ.UContext.is_empty c) then
-    fnl()++pr_in_comment (fun c -> v 0 (Univ.pr_universe_context c)) c
+    fnl()++pr_in_comment (fun c -> v 0 
+      (Univ.pr_universe_context Universes.pr_with_global_universes c)) c
   else
     mt()
 
@@ -229,7 +224,7 @@ let pr_global = pr_global_env Id.Set.empty
 let pr_puniverses f env (c,u) =
   f env c ++ 
   (if !Constrextern.print_universes then
-    str"(*" ++ Univ.Instance.pr u ++ str"*)"
+    str"(*" ++ Univ.Instance.pr Universes.pr_with_global_universes u ++ str"*)"
    else mt ())
 
 let pr_constant env cst = pr_global_env (Termops.vars_of_env env) (ConstRef cst)
@@ -260,7 +255,7 @@ let pr_var_decl_skel pr_id env sigma (id,c,typ) =
     | None ->  (mt ())
     | Some c ->
 	(* Force evaluation *)
-	let pb = pr_lconstr_core true env sigma c in
+	let pb = pr_lconstr_env env sigma c in
 	let pb = if isCast c then surround pb else pb in
 	(str" := " ++ pb ++ cut () ) in
   let pt = pr_ltype_env env sigma typ in
@@ -278,7 +273,7 @@ let pr_rel_decl env sigma (na,c,typ) =
     | None -> mt ()
     | Some c ->
 	(* Force evaluation *)
-	let pb = pr_lconstr_core true env sigma c in
+	let pb = pr_lconstr_env env sigma c in
 	let pb = if isCast c then surround pb else pb in
 	(str":=" ++ spc () ++ pb ++ spc ()) in
   let ptyp = pr_ltype_env env sigma typ in
@@ -450,6 +445,16 @@ let pr_evars_int sigma i evs = pr_evars_int_hd (fun i -> str "Existential " ++ i
 
 let pr_evars sigma evs = pr_evars_int_hd (fun i -> mt ()) sigma 1 (Evar.Map.bindings evs)
 
+(* Display a list of evars given by their name, with a prefix *)
+let pr_ne_evar_set hd tl sigma l =
+  if l != Evar.Set.empty then
+    let l = Evar.Set.fold (fun ev ->
+      Evar.Map.add ev (Evarutil.nf_evar_info sigma (Evd.find sigma ev)))
+      l Evar.Map.empty in
+    hd ++ pr_evars sigma l ++ tl
+  else
+    mt ()
+
 let default_pr_subgoal n sigma =
   let rec prrec p = function
     | [] -> error "No such goal."
@@ -539,26 +544,27 @@ let default_pr_subgoals ?(pr_first=true) close_cmd sigma seeds shelf stack goals
     else 
       pr_rec 1 (g::l)
   in
+  (* Side effect! This has to be made more robust *)
+  let () =
+    match close_cmd with
+    | Some cmd -> msg_info cmd
+    | None -> ()
+  in
   match goals with
   | [] ->
       begin
-	match close_cmd with
-	  Some cmd ->
-	    (str "Subproof completed, now type " ++ str cmd ++
-	       str ".")
-	| None ->
-	    let exl = Evarutil.non_instantiated sigma in
-	    if Evar.Map.is_empty exl then
-	      (str"No more subgoals."
-	       ++ emacs_print_dependent_evars sigma seeds)
-	    else
-	      let pei = pr_evars_int sigma 1 exl in
-	      (str "No more subgoals but non-instantiated existential " ++
-		 str "variables:" ++ fnl () ++ (hov 0 pei)
-	       ++ emacs_print_dependent_evars sigma seeds ++ fnl () ++
-                 str "You can use Grab Existential Variables.")
+	let exl = Evarutil.non_instantiated sigma in
+	if Evar.Map.is_empty exl then
+	  (str"No more subgoals."
+	   ++ emacs_print_dependent_evars sigma seeds)
+	else
+	  let pei = pr_evars_int sigma 1 exl in
+	  (str "No more subgoals but non-instantiated existential " ++
+	   str "variables:" ++ fnl () ++ (hov 0 pei)
+	   ++ emacs_print_dependent_evars sigma seeds ++ fnl () ++
+           str "You can use Grab Existential Variables.")
       end
-  | [g] when not !Flags.print_emacs ->
+  | [g] when not !Flags.print_emacs && pr_first ->
       let pg = default_pr_goal { it = g ; sigma = sigma; } in
       v 0 (
 	str "1" ++ focused_if_needed ++ str"subgoal" ++ print_extra
@@ -567,8 +573,9 @@ let default_pr_subgoals ?(pr_first=true) close_cmd sigma seeds shelf stack goals
       )
   | g1::rest ->
       let goals = print_multiple_goals g1 rest in
+      let ngoals = List.length rest+1 in
       v 0 (
-	int(List.length rest+1) ++ focused_if_needed ++ str"subgoals" ++
+	int ngoals ++ focused_if_needed ++ str(String.plural ngoals "subgoal") ++
           print_extra ++
           str ((if display_name then (fun x -> x) else emacs_str) ", subgoal 1")
         ++ pr_goal_tag g1
@@ -582,7 +589,7 @@ let default_pr_subgoals ?(pr_first=true) close_cmd sigma seeds shelf stack goals
 
 
 type printer_pr = {
- pr_subgoals            : ?pr_first:bool -> string option -> evar_map -> evar list -> Goal.goal list -> int list -> goal list -> std_ppcmds;
+ pr_subgoals            : ?pr_first:bool -> std_ppcmds option -> evar_map -> evar list -> Goal.goal list -> int list -> goal list -> std_ppcmds;
  pr_subgoal             : int -> evar_map -> goal list -> std_ppcmds;
  pr_goal                : goal sigma -> std_ppcmds;
 }
@@ -626,9 +633,14 @@ let pr_open_subgoals ?(proof=Proof_global.give_me_the_proof ()) () =
 	    fnl ()
             ++ pr_subgoals ~pr_first:false None bsigma seeds [] [] shelf
 	  | _ , _, _ ->
-	     msg_info (str "This subproof is complete, but there are still unfocused goals.");
-	    fnl ()
-            ++ pr_subgoals ~pr_first:false None bsigma seeds shelf [] bgoals
+            let end_cmd =
+              strbrk "This subproof is complete, but there are still \
+              unfocused goals." ++
+	      (match Proof_global.Bullet.suggest p
+              with None  -> str"" | Some s -> fnl () ++ str s) ++
+              fnl ()
+            in
+	    pr_subgoals ~pr_first:false (Some end_cmd) bsigma seeds shelf [] bgoals
 	  end
   | _ -> pr_subgoals None sigma seeds shelf stack goals
   end

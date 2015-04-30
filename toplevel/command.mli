@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -11,7 +11,6 @@ open Term
 open Entries
 open Libnames
 open Globnames
-open Tacexpr
 open Vernacexpr
 open Constrexpr
 open Decl_kinds
@@ -167,5 +166,5 @@ val do_cofixpoint :
 
 val check_mutuality : Environ.env -> bool -> (Id.t * types) list -> unit
 
-val declare_fix : definition_kind -> Univ.universe_context -> Id.t ->
+val declare_fix : ?opaque:bool -> definition_kind -> Univ.universe_context -> Id.t ->
   Entries.proof_output -> types -> Impargs.manual_implicits -> global_reference

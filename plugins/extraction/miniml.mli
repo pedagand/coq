@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -183,6 +183,8 @@ type ml_structure = (module_path * ml_module_structure) list
 
 type ml_signature = (module_path * ml_module_sig) list
 
+type ml_flat_structure = ml_structure_elem list
+
 type unsafe_needs = {
   mldummy : bool;
   tdummy : bool;
@@ -195,6 +197,7 @@ type language_descr = {
 
   (* Concerning the source file *)
   file_suffix : string;
+  file_naming : module_path -> string;
   (* the second argument is a comment to add to the preamble *)
   preamble :
     Id.t -> std_ppcmds option -> module_path list -> unsafe_needs ->

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -79,12 +79,11 @@ val pr_constr_pattern      : constr_pattern -> std_ppcmds
 
 val pr_cases_pattern       : cases_pattern -> std_ppcmds
 
-val pr_sort                : sorts -> std_ppcmds
+val pr_sort                : evar_map -> sorts -> std_ppcmds
 
 (** Universe constraints *)
 
 val pr_polymorphic         : bool -> std_ppcmds
-val pr_univ_cstr           : Univ.constraints -> std_ppcmds
 val pr_universe_ctx        : Univ.universe_context -> std_ppcmds
 
 (** Printing global references using names as short as possible *)
@@ -129,7 +128,7 @@ val pr_transparent_state   : transparent_state -> std_ppcmds
 (** Proofs *)
 
 val pr_goal                : goal sigma -> std_ppcmds
-val pr_subgoals            : ?pr_first:bool -> string option -> evar_map -> evar list -> Goal.goal list -> int list -> goal list -> std_ppcmds
+val pr_subgoals            : ?pr_first:bool -> std_ppcmds option -> evar_map -> evar list -> Goal.goal list -> int list -> goal list -> std_ppcmds
 val pr_subgoal             : int -> evar_map -> goal list -> std_ppcmds
 val pr_concl               : int -> evar_map -> goal -> std_ppcmds
 
@@ -138,6 +137,8 @@ val pr_nth_open_subgoal    : int -> std_ppcmds
 val pr_evar                : evar_map -> (evar * evar_info) -> std_ppcmds
 val pr_evars_int           : evar_map -> int -> evar_info Evar.Map.t -> std_ppcmds
 val pr_evars               : evar_map -> evar_info Evar.Map.t -> std_ppcmds
+val pr_ne_evar_set         : std_ppcmds -> std_ppcmds -> evar_map ->
+  Evar.Set.t -> std_ppcmds
 
 val pr_prim_rule           : prim_rule -> std_ppcmds
 
@@ -167,7 +168,7 @@ val pr_assumptionset :
 val pr_goal_by_id : string -> std_ppcmds
 
 type printer_pr = {
- pr_subgoals            : ?pr_first:bool -> string option -> evar_map -> evar list -> Goal.goal list -> int list -> goal list -> std_ppcmds;
+ pr_subgoals            : ?pr_first:bool -> std_ppcmds option -> evar_map -> evar list -> Goal.goal list -> int list -> goal list -> std_ppcmds;
  pr_subgoal             : int -> evar_map -> goal list -> std_ppcmds;
  pr_goal                : goal sigma -> std_ppcmds;
 };;

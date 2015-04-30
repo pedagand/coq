@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -174,6 +174,16 @@ struct
     | _, Level _ -> 1
     | Var n, Var m -> Int.compare n m
 
+  let hequal x y =
+    x == y ||
+      match x, y with
+      | Prop, Prop -> true
+      | Set, Set -> true
+      | Level (n,d), Level (n',d') ->
+        n == n' && d == d'
+      | Var n, Var n' -> n == n'
+      | _ -> false
+
   let hcons = function
     | Prop as x -> x
     | Set as x -> x
@@ -211,27 +221,26 @@ module Level = struct
 
   let hash x = x.hash
 
-  let hcons x = 
-    let data' = RawLevel.hcons x.data in
-      if data' == x.data then x
-      else { x with data = data' }
-
   let data x = x.data
 
   (** Hashcons on levels + their hash *)
 
-  let make =
-    let module Self = struct
-      type _t = t
-      type t = _t
-      let equal = equal
-      let hash = hash
-    end in
-    let module WH = Weak.Make(Self) in
-    let pool = WH.create 4910 in fun x ->
-    let x = { hash = RawLevel.hash x; data = x } in
-    try WH.find pool x
-    with Not_found -> WH.add pool x; x
+  module Self = struct
+    type _t = t
+    type t = _t
+    type u = unit
+    let equal x y = x.hash == y.hash && RawLevel.hequal x.data y.data
+    let hash x = x.hash
+    let hashcons () x =
+      let data' = RawLevel.hcons x.data in
+      if x.data == data' then x else { x with data = data' }
+  end
+
+  let hcons =
+    let module H = Hashcons.Make(Self) in
+    Hashcons.simple_hcons H.generate H.hcons ()
+
+  let make l = hcons { hash = RawLevel.hash l; data = l }
 
   let set = make Set
   let prop = make Prop
@@ -1014,25 +1023,6 @@ let check_constraint g (l,d,r) =
 
 let check_constraints c g =
   Constraint.for_all (check_constraint g) c
-
-(**********************************************************************)
-(* Tools for sort-polymorphic inductive types                         *)
-
-(* Miscellaneous functions to remove or test local univ assumed to
-   occur only in the le constraints *)
-
-let remove_large_constraint u v min = 
-  match Universe.level v with
-  | Some u' -> if Level.equal u u' then min else v
-  | None -> Huniv.remove (Universe.Expr.make u) v
-
-let subst_large_constraint u u' v =
-  (* if is_direct_constraint u v then  *)
-  Universe.sup u' (remove_large_constraint u v type0m_univ)
-  (* else v *)
-
-let subst_large_constraints =
-  List.fold_right (fun (u,u') -> subst_large_constraint u u')
 
 (**********************************************************************)
 (** Universe polymorphism                                             *)

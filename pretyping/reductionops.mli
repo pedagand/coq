@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -268,9 +268,11 @@ val check_conv : ?pb:conv_pb -> ?ts:transparent_state -> env ->  evar_map -> con
 
 (** [infer_fconv] Adds necessary universe constraints to the evar map.
     pb defaults to CUMUL and ts to a full transparent state.
+    @raises UniverseInconsistency iff catch_incon is set to false, 
+    otherwise returns false in that case.
  *)
-val infer_conv : ?pb:conv_pb -> ?ts:transparent_state -> env ->  evar_map -> constr -> constr -> 
-  evar_map * bool
+val infer_conv : ?catch_incon:bool -> ?pb:conv_pb -> ?ts:transparent_state -> 
+  env -> evar_map -> constr -> constr -> evar_map * bool
 
 (** {6 Special-Purpose Reduction Functions } *)
 
@@ -278,6 +280,7 @@ val whd_meta : evar_map -> constr -> constr
 val plain_instance : constr Metamap.t -> constr -> constr
 val instance : evar_map -> constr Metamap.t -> constr -> constr
 val head_unfold_under_prod : transparent_state -> reduction_function
+val betazetaevar_applist : evar_map -> int -> constr -> constr list -> constr
 
 (** {6 Heuristic for Conversion with Evar } *)
 

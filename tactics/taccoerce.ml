@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -176,6 +176,13 @@ let coerce_to_evaluable_ref env v =
     let id = out_gen (topwit wit_var) v in
     if Id.List.mem id (Termops.ids_of_context env) then EvalVarRef id
     else fail ()
+  else if has_type v (topwit wit_ref) then
+    let open Globnames in
+    let r = out_gen (topwit wit_ref) v in
+    match r with
+    | VarRef var -> EvalVarRef var
+    | ConstRef c -> EvalConstRef c
+    | IndRef _ | ConstructRef _ -> fail ()
   else
     let ev = match Value.to_constr v with
     | Some c when isConst c -> EvalConstRef (Univ.out_punivs (destConst c))

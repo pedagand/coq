@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -185,7 +185,7 @@ let look_for_possibly_mutual_statements = function
 
 (* Saving a goal *)
 
-let save id const cstrs do_guard (locality,poly,kind) hook =
+let save ?export_seff id const cstrs do_guard (locality,poly,kind) hook =
   let fix_exn = Future.fix_exn_of const.Entries.const_entry_body in
   try
     let const = adjust_guardness_conditions const do_guard in
@@ -200,7 +200,8 @@ let save id const cstrs do_guard (locality,poly,kind) hook =
           | Local | Discharge -> true
           | Global -> false
           in
-          let kn = declare_constant id ~local (DefinitionEntry const, k) in
+          let kn =
+           declare_constant ?export_seff id ~local (DefinitionEntry const, k) in
           (locality, ConstRef kn) in
     definition_message id;
     call_hook (fun exn -> exn) hook l r
@@ -273,35 +274,29 @@ let save_remaining_recthms (locality,p,kind) norm ctx body opaq i (id,(t_i,(_,im
 let save_hook = ref ignore
 let set_save_hook f = save_hook := f
 
-let save_named proof =
+let save_named ?export_seff proof =
   let id,const,cstrs,do_guard,persistence,hook = proof in
-  save id const cstrs do_guard persistence hook
+  save ?export_seff id const cstrs do_guard persistence hook
 
 let check_anonymity id save_ident =
   if not (String.equal (atompart_of_id id) (Id.to_string (default_thm_id))) then
     error "This command can only be used for unnamed theorem."
 
 
-let save_anonymous proof save_ident =
+let save_anonymous ?export_seff proof save_ident =
   let id,const,cstrs,do_guard,persistence,hook = proof in
   check_anonymity id save_ident;
-  save save_ident const cstrs do_guard persistence hook
+  save ?export_seff save_ident const cstrs do_guard persistence hook
 
-let save_anonymous_with_strength proof kind save_ident =
+let save_anonymous_with_strength ?export_seff proof kind save_ident =
   let id,const,cstrs,do_guard,_,hook = proof in
   check_anonymity id save_ident;
   (* we consider that non opaque behaves as local for discharge *)
-  save save_ident const cstrs do_guard (Global, const.const_entry_polymorphic, Proof kind) hook
+  save ?export_seff save_ident const cstrs do_guard (Global, const.const_entry_polymorphic, Proof kind) hook
 
 (* Admitted *)
 
-let admit hook () =
-  let (id,k,typ) = Pfedit.current_proof_statement () in
-  let ctx =
-    let evd = fst (Pfedit.get_current_goal_context ()) in
-      Evd.universe_context evd
-  in
-  let e = Pfedit.get_used_variables(), pi2 k, (typ, ctx), None in
+let admit (id,k,e) hook () =
   let kn = declare_constant id (ParameterEntry e, IsAssumption Conjectural) in
   let () = match k with
   | Global, _, _ -> ()
@@ -325,34 +320,50 @@ let get_proof proof do_guard hook opacity =
   (** FIXME *)
   id,{const with const_entry_opaque = opacity},cstrs,do_guard,persistence,hook
 
+let check_exist =
+  List.iter (fun (loc,id) ->
+    if not (Nametab.exists_cci (Lib.make_path id)) then
+        user_err_loc (loc,"",pr_id id ++ str " does not exist.")
+  )
+
 let standard_proof_terminator compute_guard hook =
   let open Proof_global in function
-  | Admitted ->
-      admit hook ();
+  | Admitted (id,k,pe) ->
+      admit (id,k,pe) hook ();
       Pp.feedback Feedback.AddedAxiom
-  | Proved (is_opaque,idopt,proof) ->
+  | Proved (opaque,idopt,proof) ->
+      let is_opaque, export_seff, exports = match opaque with
+        | Vernacexpr.Transparent -> false, true, []
+        | Vernacexpr.Opaque None -> true, false, []
+        | Vernacexpr.Opaque (Some l) -> true, true, l in
       let proof = get_proof proof compute_guard hook is_opaque in
       begin match idopt with
-      | None -> save_named proof
-      | Some ((_,id),None) -> save_anonymous proof id
+      | None -> save_named ~export_seff proof
+      | Some ((_,id),None) -> save_anonymous ~export_seff proof id
       | Some ((_,id),Some kind) -> 
-          save_anonymous_with_strength proof kind id
-      end
+          save_anonymous_with_strength ~export_seff proof kind id
+      end;
+      check_exist exports
 
 let universe_proof_terminator compute_guard hook =
   let open Proof_global in function
-  | Admitted ->
-      admit (hook None) ();
+  | Admitted (id,k,pe) ->
+      admit (id,k,pe) (hook None) ();
       Pp.feedback Feedback.AddedAxiom
-  | Proved (is_opaque,idopt,proof) ->
+  | Proved (opaque,idopt,proof) ->
+      let is_opaque, export_seff, exports = match opaque with
+        | Vernacexpr.Transparent -> false, true, []
+        | Vernacexpr.Opaque None -> true, false, []
+        | Vernacexpr.Opaque (Some l) -> true, true, l in
       let proof = get_proof proof compute_guard 
 	(hook (Some proof.Proof_global.universes)) is_opaque in
       begin match idopt with
-      | None -> save_named proof
-      | Some ((_,id),None) -> save_anonymous proof id
+      | None -> save_named ~export_seff proof
+      | Some ((_,id),None) -> save_anonymous ~export_seff proof id
       | Some ((_,id),Some kind) -> 
-          save_anonymous_with_strength proof kind id
-      end
+          save_anonymous_with_strength ~export_seff proof kind id
+      end;
+      check_exist exports
 
 let start_proof id kind sigma ?sign c ?init_tac ?(compute_guard=[]) hook =
   let terminator = standard_proof_terminator compute_guard hook in
@@ -458,7 +469,37 @@ let start_proof_com kind thms hook =
 
 let save_proof ?proof = function
   | Vernacexpr.Admitted ->
-      Proof_global.get_terminator() Proof_global.Admitted
+      let pe =
+        let open Proof_global in
+        match proof with
+        | Some ({ id; entries; persistence = k; universes }, _) ->
+            if List.length entries <> 1 then
+              error "Admitted does not support multiple statements";
+            let { const_entry_secctx; const_entry_type } = List.hd entries in
+            if const_entry_type = None then
+              error "Admitted requires an explicit statement";
+            let typ = Option.get const_entry_type in
+            let ctx = Evd.evar_context_universe_context universes in
+            Admitted(id, k, (const_entry_secctx, pi2 k, (typ, ctx), None))
+        | None ->
+            let id, k, typ = Pfedit.current_proof_statement () in
+            let ctx =
+              let evd, _ = Pfedit.get_current_goal_context () in
+              Evd.universe_context evd in
+            (* This will warn if the proof is complete *)
+            let pproofs,_ = Proof_global.return_proof ~allow_partial:true () in
+            let sec_vars =
+              match  Pfedit.get_used_variables(), pproofs with
+              | Some _ as x, _ -> x
+              | None, (pproof, _) :: _ -> 
+                  let env = Global.env () in
+                  let ids_typ = Environ.global_vars_set env typ in
+                  let ids_def = Environ.global_vars_set env pproof in
+                  Some (Environ.keep_hyps env (Idset.union ids_typ ids_def))
+              | _ -> None in
+            Admitted(id,k,(sec_vars, pi2 k, (typ, ctx), None))
+      in
+      Proof_global.get_terminator() pe
   | Vernacexpr.Proved (is_opaque,idopt) ->
       let (proof_obj,terminator) =
         match proof with

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -24,6 +24,8 @@ val ldots_var : Id.t
 (** Equality of [glob_constr] (warning: only partially implemented) *)
 (** FIXME: nothing to do here *)
 val eq_glob_constr : glob_constr -> glob_constr -> bool
+
+val eq_notation_constr : notation_constr -> notation_constr -> bool
 
 (** Re-interpret a notation as a [glob_constr], taking care of binders     *)
 

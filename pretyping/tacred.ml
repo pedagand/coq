@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -23,7 +23,6 @@ open Reductionops
 open Cbv
 open Patternops
 open Locus
-open Pretype_errors
 
 (* Errors *)
 
@@ -190,6 +189,7 @@ let check_fix_reversibility labs args ((lv,i),(_,tys,bds)) =
              if
 	       Array.for_all (noccurn k) tys
 	       && Array.for_all (noccurn (k+nbfix)) bds
+	       && k <= n
 	     then
 	       (k, List.nth labs (k-1))
 	     else
@@ -597,13 +597,6 @@ let reduce_proj env sigma whfun whfun' c =
     | _ -> raise Redelimination
   in redrec c
 
-
-let dont_expose_case = function
-  | EvalVar _ | EvalRel _ | EvalEvar _ -> false
-  | EvalConst c ->
-     Option.cata (fun (_,_,z) -> List.mem `ReductionDontExposeCase z)
-		 false (ReductionBehaviour.get (ConstRef c))
-
 let whd_nothing_for_iota env sigma s =
   let rec whrec (x, stack as s) =
     match kind_of_term x with
@@ -943,9 +936,9 @@ let simpl env sigma c = strong whd_simpl env sigma c
 
 let matches_head env sigma c t =
   match kind_of_term t with
-    | App (f,_) -> ConstrMatching.matches env sigma c f
-    | Proj (p, _) -> ConstrMatching.matches env sigma c (mkConst (Projection.constant p))
-    | _ -> raise ConstrMatching.PatternMatchingFailure
+    | App (f,_) -> Constr_matching.matches env sigma c f
+    | Proj (p, _) -> Constr_matching.matches env sigma c (mkConst (Projection.constant p))
+    | _ -> raise Constr_matching.PatternMatchingFailure
 
 let is_pattern_meta = function Pattern.PMeta _ -> true | _ -> false
 
@@ -980,7 +973,7 @@ let e_contextually byhead (occs,c) f env sigma t =
     try
       let subst =
         if byhead then matches_head env sigma c t 
-	else ConstrMatching.matches env sigma c t in
+	else Constr_matching.matches env sigma c t in
       let ok =
 	if nowhere_except_in then Int.List.mem !pos locs
 	else not (Int.List.mem !pos locs) in
@@ -996,7 +989,7 @@ let e_contextually byhead (occs,c) f env sigma t =
       end
       else
 	traverse_below nested envc t
-    with ConstrMatching.PatternMatchingFailure ->
+    with Constr_matching.PatternMatchingFailure ->
       traverse_below nested envc t
   and traverse_below nested envc t =
     (* when byhead, find other occurrences without matching again partial
@@ -1212,9 +1205,10 @@ let one_step_reduce env sigma c =
 	       (ci,p,c,lf), stack)
            with Redelimination -> raise NotStepReducible)
       | Fix fix ->
-	  (match reduce_fix (whd_construct_stack env) sigma fix stack with
+	  (try match reduce_fix (whd_construct_stack env) sigma fix stack with
              | Reduced s' -> s'
-	     | NotReducible -> raise NotStepReducible)
+	     | NotReducible -> raise NotStepReducible
+           with Redelimination -> raise NotStepReducible)
       | _ when isEvalRef env x ->
 	  let ref,u = destEvalRefU x in
           (try

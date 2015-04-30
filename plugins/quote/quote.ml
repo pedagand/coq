@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -107,7 +107,7 @@ open Names
 open Term
 open Pattern
 open Patternops
-open ConstrMatching
+open Constr_matching
 open Tacmach
 (*i*)
 
@@ -211,9 +211,9 @@ let compute_rhs bodyi index_of_f =
           let i = destRel (Array.last args) in
 	  PMeta (Some (coerce_meta_in i))
       | App (f,args) ->
-          PApp (snd (pattern_of_constr (Global.env()) Evd.empty f), Array.map aux args)
+          PApp (pi3 (pattern_of_constr (Global.env()) Evd.empty f), Array.map aux args)
       | Cast (c,_,_) -> aux c
-      | _ -> snd (pattern_of_constr (Global.env())(*FIXME*) Evd.empty c)
+      | _ -> pi3 (pattern_of_constr (Global.env())(*FIXME*) Evd.empty c)
   in
   aux bodyi
 

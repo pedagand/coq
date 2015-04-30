@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -180,7 +180,7 @@ let rec pr_disjunction pr = function
 let pr_puniverses f env (c,u) = 
   f env c ++ 
   (if Flags.is_universe_polymorphism () && not (Univ.Instance.is_empty u) then
-    str"(*" ++ Univ.Instance.pr u ++ str"*)"
+    str"(*" ++ Univ.Instance.pr Universes.pr_with_global_universes u ++ str"*)"
   else mt())
 
 let explain_elim_arity env sigma ind sorts c pj okinds =
@@ -260,10 +260,10 @@ let explain_generalization env sigma (name,var) j =
   str "it has type" ++ spc () ++ pt ++
   spc () ++ str "which should be Set, Prop or Type."
 
-let explain_unification_error env sigma p1 p2 = function
+let rec explain_unification_error env sigma p1 p2 = function
   | None -> mt()
   | Some e ->
-     let rec aux = function
+     let rec aux p1 p2 = function
      | OccurCheck (evk,rhs) ->
         let rhs = Evarutil.nf_evar sigma rhs in
         [str "cannot define " ++ quote (pr_existential_key sigma evk) ++
@@ -301,7 +301,7 @@ let explain_unification_error env sigma p1 p2 = function
      | UnifUnivInconsistency p ->
         if !Constrextern.print_universes then
 	  [str "universe inconsistency: " ++
-          Univ.explain_universe_inconsistency p]
+          Univ.explain_universe_inconsistency Universes.pr_with_global_universes p]
 	else
           [str "universe inconsistency"]
      | CannotSolveConstraint ((pb,env,t,u),e) ->
@@ -309,9 +309,9 @@ let explain_unification_error env sigma p1 p2 = function
         let u = Evarutil.nf_evar sigma u in
         (strbrk "cannot satisfy constraint " ++ pr_lconstr_env env sigma t ++
         str " == " ++ pr_lconstr_env env sigma u)
-        :: aux e
+        :: aux t u e
      in
-     match aux e with
+     match aux p1 p2 e with
      | [] -> mt ()
      | l -> spc () ++ str "(" ++
             prlist_with_sep pr_semicolon (fun x -> x) l ++ str ")"
@@ -659,8 +659,9 @@ let explain_non_linear_unification env sigma m t =
   strbrk " which would require to abstract twice on " ++
   pr_lconstr_env env sigma t ++ str "."
 
-let explain_unsatisfied_constraints env cst =
-  strbrk "Unsatisfied constraints: " ++ Univ.pr_constraints cst ++ 
+let explain_unsatisfied_constraints env sigma cst =
+  strbrk "Unsatisfied constraints: " ++ 
+    Univ.pr_constraints (Evd.pr_evd_level sigma) cst ++ 
     spc () ++ str "(maybe a bugged tactic)."
 
 let explain_type_error env sigma err =
@@ -699,7 +700,7 @@ let explain_type_error env sigma err =
   | WrongCaseInfo (ind,ci) ->
       explain_wrong_case_info env ind ci
   | UnsatisfiedConstraints cst ->
-      explain_unsatisfied_constraints env cst
+      explain_unsatisfied_constraints env sigma cst
 
 let pr_position (cl,pos) =
   let clpos = match cl with
@@ -860,7 +861,7 @@ let explain_not_match_error = function
     str"polymorphic universe instances do not match"
   | IncompatibleUniverses incon ->
     str"the universe constraints are inconsistent: " ++
-      Univ.explain_universe_inconsistency incon
+      Univ.explain_universe_inconsistency Universes.pr_with_global_universes incon
   | IncompatiblePolymorphism (env, t1, t2) ->
     str "conversion of polymorphic values generates additional constraints: " ++
       quote (Printer.safe_pr_lconstr_env env Evd.empty t1) ++ spc () ++
@@ -868,7 +869,7 @@ let explain_not_match_error = function
       quote (Printer.safe_pr_lconstr_env env Evd.empty t2)
   | IncompatibleConstraints cst ->
     str " the expected (polymorphic) constraints do not imply " ++
-      quote (Univ.pr_constraints cst)
+      quote (Univ.pr_constraints (Evd.pr_evd_level Evd.empty) cst)
 
 let explain_signature_mismatch l spec why =
   str "Signature components for label " ++ str (Label.to_string l) ++
@@ -878,7 +879,9 @@ let explain_label_already_declared l =
   str ("The label "^Label.to_string l^" is already declared.")
 
 let explain_application_to_not_path _ =
-  str "Application of modules is restricted to paths."
+  strbrk "A module cannot be applied to another module application or " ++
+  strbrk "with-expression; you must give a name to the intermediate result " ++
+  strbrk "module first."
 
 let explain_not_a_functor () =
   str "Application of a non-functor."
@@ -1112,7 +1115,7 @@ let error_large_non_prop_inductive_not_in_type () =
 
 let error_not_allowed_case_analysis isrec kind i =
   str (if isrec then "Induction" else "Case analysis") ++
-  strbrk " on sort " ++ pr_sort kind ++
+  strbrk " on sort " ++ pr_sort Evd.empty kind ++
   strbrk " is not allowed for inductive definition " ++
   pr_inductive (Global.env()) (fst i) ++ str "."
 

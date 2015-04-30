@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -146,7 +146,6 @@ let discharged_hyps kn sechyps =
 
 let discharge_constant ((sp, kn), obj) =
   let con = constant_of_kn kn in
-
   let from = Global.lookup_constant con in
   let modlist = replacement_context () in
   let hyps,subst,uctx = section_segment_of_constant con in
@@ -254,24 +253,25 @@ let declare_sideff env fix_exn se =
                if Constant.equal c c' then Some (x,kn) else None) inds_consts)
            knl))
 
-let declare_constant ?(internal = UserVerbose) ?(local = false) id (cd, kind) =
-  let cd = (* We deal with side effects of non-opaque constants *)
+let declare_constant ?(internal = UserVerbose) ?(local = false) id ?(export_seff=false) (cd, kind) =
+  let cd = (* We deal with side effects *)
     match cd with
-    | Entries.DefinitionEntry ({
-      const_entry_opaque = false; const_entry_body = bo } as de)
-    | Entries.DefinitionEntry ({
-      const_entry_polymorphic = true; const_entry_body = bo } as de)
-      ->
-        let _, seff = Future.force bo in
-        if Declareops.side_effects_is_empty seff then cd
-        else begin
-          let seff = Declareops.uniquize_side_effects seff in
-          Declareops.iter_side_effects
-            (declare_sideff (Global.env ()) (Future.fix_exn_of bo)) seff;
-          Entries.DefinitionEntry { de with
-            const_entry_body = Future.chain ~pure:true bo (fun (pt, _) ->
-              pt, Declareops.no_seff) }
+    | Entries.DefinitionEntry de ->
+        if export_seff ||
+           not de.const_entry_opaque ||
+           de.const_entry_polymorphic then
+          let bo = de.const_entry_body in
+          let _, seff = Future.force bo in
+          if Declareops.side_effects_is_empty seff then cd
+          else begin
+            let seff = Declareops.uniquize_side_effects seff in
+            Declareops.iter_side_effects
+              (declare_sideff (Global.env ()) (Future.fix_exn_of bo)) seff;
+            Entries.DefinitionEntry { de with
+              const_entry_body = Future.chain ~pure:true bo (fun (pt, _) ->
+                pt, Declareops.no_seff) }
         end
+        else cd
     | _ -> cd
   in
   let cst = {

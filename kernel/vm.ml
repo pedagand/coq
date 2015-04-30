@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -79,7 +79,7 @@ type vprod
 type vfun
 type vfix
 type vcofix
-type vblock
+type vblock 
 type arguments
 
 type vm_env
@@ -137,10 +137,11 @@ type vswitch = {
 (* Generally the first field is a code pointer.                           *)
 
 (* Do not edit this type without editing C code, especially "coq_values.h" *)
+
 type atom =
-  | Aid of id_key
-  | Aiddef of id_key * values
-  | Aind of inductive
+  | Aid of Vars.id_key
+  | Aiddef of Vars.id_key * values
+  | Aind of pinductive
 
 (* Zippers *)
 
@@ -223,10 +224,9 @@ let whd_val : values -> whd =
 	   | 2 -> Vfix(Obj.obj (Obj.field o 1), Some (Obj.obj o))
 	   | 3 -> Vatom_stk(Aid(RelKey(int_tcode (fun_code o) 1)), [])
 	   | _ -> Errors.anomaly ~label:"Vm.whd " (Pp.str "kind_of_closure does not work"))
-	else Vconstr_block(Obj.obj o)
-
-
-
+	else 
+          Vconstr_block(Obj.obj o)
+         
 (************************************************)
 (* Abstrct machine ******************************)
 (************************************************)
@@ -306,11 +306,11 @@ let val_of_atom a = val_of_obj (obj_of_atom a)
 
 module IdKeyHash =
 struct
-  type t = id_key
-  let equal = Names.eq_id_key
+  type t = pconstant tableKey
+  let equal = Names.eq_table_key (Univ.eq_puniverses Constant.equal)
   open Hashset.Combine
   let hash = function
-  | ConstKey c -> combinesmall 1 (Constant.hash c)
+  | ConstKey (c,u) -> combinesmall 1 (Constant.hash c)
   | VarKey id -> combinesmall 2 (Id.hash id)
   | RelKey i -> combinesmall 3 (Int.hash i)
 end
@@ -517,8 +517,13 @@ let type_of_switch sw =
 let branch_arg k (tag,arity) =
   if Int.equal arity 0 then  ((Obj.magic tag):values)
   else
-    let b = Obj.new_block tag arity in
-    for i = 0 to arity - 1 do
+    let b, ofs = 
+      if tag < last_variant_tag then Obj.new_block tag arity, 0
+      else
+        let b = Obj.new_block last_variant_tag (arity+1) in
+        Obj.set_field b 0 (Obj.repr (tag-last_variant_tag));
+        b,1 in
+    for i = ofs to ofs + arity - 1 do
       Obj.set_field b i (Obj.repr (val_of_rel (k+i)))
     done;
     val_of_obj b

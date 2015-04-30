@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -43,6 +43,7 @@ module type S =
     type table
     val generate : u -> table
     val hcons : table -> t -> t
+    val stats : table -> Hashset.statistics
   end
 
 module Make (X : HashconsedType) : (S with type t = X.t and type u = X.u) =
@@ -66,6 +67,8 @@ module Make (X : HashconsedType) : (S with type t = X.t and type u = X.u) =
     let hcons (tab, u) x =
       let y = X.hashcons u x in
       Htbl.repr (X.hash y) y tab
+
+    let stats (tab, _) = Htbl.stats tab
 
   end
 

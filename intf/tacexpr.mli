@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -10,12 +10,10 @@ open Loc
 open Names
 open Constrexpr
 open Libnames
-open Globnames
 open Nametab
 open Genredexpr
 open Genarg
 open Pattern
-open Decl_kinds
 open Misctypes
 open Locus
 
@@ -99,6 +97,11 @@ type ('a,'t) match_rule =
 type ml_tactic_name = {
   mltac_plugin : string;
   mltac_tactic : string;
+}
+
+type ml_tactic_entry = {
+  mltac_name : ml_tactic_name;
+  mltac_index : int;
 }
 
 (** Composite types *)
@@ -287,7 +290,7 @@ and 'a gen_tactic_expr =
   | TacFun of 'a gen_tactic_fun_ast
   | TacArg of 'a gen_tactic_arg located
   (* For ML extensions *)
-  | TacML of Loc.t * ml_tactic_name * 'l generic_argument list
+  | TacML of Loc.t * ml_tactic_entry * 'l generic_argument list
   (* For syntax extensions *)
   | TacAlias of Loc.t * KerName.t * (Id.t * 'l generic_argument) list
 

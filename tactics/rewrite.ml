@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -283,7 +283,7 @@ end) = struct
 	(app_poly env evd arrow [| a; b |]), unfold_impl
 	(* (evd, mkProd (Anonymous, a, b)), (fun x -> x) *)
       else if bp then (* Dummy forall *)
-	(app_poly env evd coq_all [| a; mkLambda (Anonymous, a, b) |]), unfold_forall
+	(app_poly env evd coq_all [| a; mkLambda (Anonymous, a, lift 1 b) |]), unfold_forall
       else (* None in Prop, use arrow *)
 	(app_poly env evd arrow [| a; b |]), unfold_impl
 
@@ -629,11 +629,9 @@ let solve_remaining_by env sigma holes by =
       | None -> sigma
         (** Evar should not be defined, but just in case *)
       | Some evi ->
-        let ctx = Evd.evar_universe_context sigma in
         let env = Environ.reset_with_named_context evi.evar_hyps env in
         let ty = evi.evar_concl in
-        let c, _, ctx = Pfedit.build_by_tactic env ctx ty solve_tac in
-        let sigma = Evd.set_universe_context sigma ctx in
+        let c, sigma = Pfedit.refine_by_tactic env sigma ty solve_tac in
         Evd.define evk c sigma
     in
     List.fold_left solve sigma indep
@@ -1446,7 +1444,14 @@ let cl_rewrite_clause_aux ?(abs=None) strat env avoid sigma concl is_hyp : resul
       let newt = Evarutil.nf_evar evars' res.rew_to in
       let evars = (* Keep only original evars (potentially instantiated) and goal evars,
 		     the rest has been defined and substituted already. *)
-	Evar.Set.fold (fun ev acc -> Evd.remove acc ev) cstrs evars'
+	Evar.Set.fold 
+	  (fun ev acc -> 
+	   if not (Evd.is_defined acc ev) then 
+	     errorlabstrm "rewrite"
+			  (str "Unsolved constraint remaining: " ++ spc () ++
+			   Evd.pr_evar_info (Evd.find acc ev))
+	   else Evd.remove acc ev) 
+	  cstrs evars'
       in
       let res = match res.rew_prf with
 	| RewCast c -> None
@@ -1466,28 +1471,32 @@ let cl_rewrite_clause_aux ?(abs=None) strat env avoid sigma concl is_hyp : resul
           in Some proof
       in Some (Some (evars, res, newt))
 
+(** Insert a declaration after the last declaration it depends on *)
+let rec insert_dependent env decl accu hyps = match hyps with
+| [] -> List.rev_append accu [decl]
+| (id, _, _  as ndecl) :: rem ->
+  if occur_var_in_decl env id decl then
+    List.rev_append accu (decl :: hyps)
+  else
+    insert_dependent env decl (ndecl :: accu) rem
+
 let assert_replacing id newt tac = 
   let prf = Proofview.Goal.nf_enter begin fun gl ->
     let concl = Proofview.Goal.concl gl in
     let env = Proofview.Goal.env gl in
-    let nc' =
-      Environ.fold_named_context
-        (fun _ (n, b, t as decl) nc' ->
-          if Id.equal n id then (n, b, newt) :: nc'
-          else decl :: nc')
-        env ~init:[]
+    let ctx = Environ.named_context env in
+    let after, before = List.split_when (fun (n, b, t) -> Id.equal n id) ctx in
+    let nc = match before with
+    | [] -> assert false
+    | (id, b, _) :: rem -> insert_dependent env (id, b, newt) [] after @ rem
     in
-    Proofview.Refine.refine begin fun sigma ->
-      let env' = Environ.reset_with_named_context (val_of_named_context nc') env in
+    let env' = Environ.reset_with_named_context (val_of_named_context nc) env in
+    Proofview.Refine.refine ~unsafe:false begin fun sigma ->
       let sigma, ev = Evarutil.new_evar env' sigma concl in
       let sigma, ev' = Evarutil.new_evar env sigma newt in
-      let fold _ (n, b, t) inst =
-        if Id.equal n id then ev' :: inst
-        else mkVar n :: inst
-      in
-      let inst = fold_named_context fold env ~init:[] in
-      let (e, args) = destEvar ev in
-      sigma, mkEvar (e, Array.of_list inst)
+      let map (n, _, _) = if Id.equal n id then ev' else mkVar n in
+      let (e, _) = destEvar ev in
+      sigma, mkEvar (e, Array.map_of_list map nc)
     end
   end in
   Proofview.tclTHEN prf (Proofview.tclFOCUS 2 2 tac)
@@ -1507,7 +1516,7 @@ let cl_rewrite_clause_newtac ?abs ?origsigma strat clause =
         let gls = List.rev (Evd.fold_undefined fold undef []) in
 	match is_hyp, prf with
 	| Some id, Some p ->
-            let tac = Proofview.Refine.refine (fun h -> (h, p)) <*> Proofview.Unsafe.tclNEWGOALS gls in
+            let tac = Proofview.Refine.refine ~unsafe:false (fun h -> (h, p)) <*> Proofview.Unsafe.tclNEWGOALS gls in
             Proofview.Unsafe.tclEVARS undef <*>
 	    assert_replacing id newt tac
 	| Some id, None ->
@@ -1521,7 +1530,7 @@ let cl_rewrite_clause_newtac ?abs ?origsigma strat clause =
               let (sigma, ev) = Evarutil.new_evar env sigma newt in
               sigma, mkApp (p, [| ev |])
             in
-            Proofview.Refine.refine make <*> Proofview.Unsafe.tclNEWGOALS gls
+            Proofview.Refine.refine ~unsafe:false make <*> Proofview.Unsafe.tclNEWGOALS gls
             end
 	| None, None ->
             Proofview.Unsafe.tclEVARS undef <*>

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -81,6 +81,7 @@ let init_channels () =
 
 let get_channels () =
   match !channels with
-  | None -> Errors.anomaly(Pp.str "init_channels not called")
+  | None ->
+    Printf.eprintf "Fatal error: ideslave communication channels not set.\n";
+    exit 1
   | Some(ic, oc) -> ic, oc
-

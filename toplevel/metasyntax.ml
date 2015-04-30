@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -61,23 +61,34 @@ let rec make_tags = function
   | GramNonTerminal (loc, etyp, _, po) :: l -> etyp :: make_tags l
   | [] -> []
 
+let make_fresh_key =
+  let id = Summary.ref ~name:"Tactic Notation counter" 0 in
+  fun () -> KerName.make
+    (Safe_typing.current_modpath (Global.safe_env ()))
+    (Global.current_dirpath ())
+    (incr id; Label.make ("_" ^ string_of_int !id))
+
 type tactic_grammar_obj = {
+  tacobj_key : KerName.t;
   tacobj_local : locality_flag;
   tacobj_tacgram : tactic_grammar;
   tacobj_tacpp : Pptactic.pp_tactic;
   tacobj_body : Tacexpr.glob_tactic_expr
 }
 
-let cache_tactic_notation ((_, key), tobj) =
+let cache_tactic_notation (_, tobj) =
+  let key = tobj.tacobj_key in
   Tacenv.register_alias key tobj.tacobj_body;
   Egramcoq.extend_tactic_grammar key tobj.tacobj_tacgram;
   Pptactic.declare_notation_tactic_pprule key tobj.tacobj_tacpp
 
-let open_tactic_notation i ((_, key), tobj) =
+let open_tactic_notation i (_, tobj) =
+  let key = tobj.tacobj_key in
   if Int.equal i 1 && not tobj.tacobj_local then
     Egramcoq.extend_tactic_grammar key tobj.tacobj_tacgram
 
-let load_tactic_notation i ((_, key), tobj) =
+let load_tactic_notation i (_, tobj) =
+  let key = tobj.tacobj_key in
   (** Only add the printing and interpretation rules. *)
   Tacenv.register_alias key tobj.tacobj_body;
   Pptactic.declare_notation_tactic_pprule key tobj.tacobj_tacpp;
@@ -85,7 +96,10 @@ let load_tactic_notation i ((_, key), tobj) =
     Egramcoq.extend_tactic_grammar key tobj.tacobj_tacgram
 
 let subst_tactic_notation (subst, tobj) =
-  { tobj with tacobj_body = Tacsubst.subst_tactic subst tobj.tacobj_body; }
+  { tobj with
+    tacobj_key = Mod_subst.subst_kn subst tobj.tacobj_key;
+    tacobj_body = Tacsubst.subst_tactic subst tobj.tacobj_body;
+  }
 
 let classify_tactic_notation tacobj = Substitute tacobj
 
@@ -115,6 +129,7 @@ let add_tactic_notation (local,n,prods,e) =
     tacgram_prods = prods;
   } in
   let tacobj = {
+    tacobj_key = make_fresh_key ();
     tacobj_local = local;
     tacobj_tacgram = parule;
     tacobj_tacpp = pprule;
@@ -137,13 +152,15 @@ type ml_tactic_grammar_obj = {
 (** ML tactic notations whose use can be restricted to an identifier are added
     as true Ltac entries. *)
 let extend_atomic_tactic name entries =
-  let add_atomic (id, args) = match args with
+  let add_atomic i (id, args) = match args with
   | None -> ()
   | Some args ->
-    let body = Tacexpr.TacML (Loc.ghost, name, args) in
+    let open Tacexpr in
+    let entry = { mltac_name = name; mltac_index = i } in
+    let body = TacML (Loc.ghost, entry, args) in
     Tacenv.register_ltac false false (Names.Id.of_string id) body
   in
-  List.iter add_atomic entries
+  List.iteri add_atomic entries
 
 let cache_ml_tactic_notation (_, obj) =
   extend_ml_tactic_grammar obj.mltacobj_name obj.mltacobj_prod
@@ -1103,7 +1120,7 @@ let open_notation i (_, nobj) =
   let scope = nobj.notobj_scope in
   let (ntn, df) = nobj.notobj_notation in
   let pat = nobj.notobj_interp in
-  if Int.equal i 1 then begin
+  if Int.equal i 1 && not (Notation.exists_notation_in_scope scope ntn pat) then begin
     (* Declare the interpretation *)
     Notation.declare_notation_interpretation ntn scope pat df;
     (* Declare the uninterpretation *)

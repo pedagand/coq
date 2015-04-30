@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -65,6 +65,11 @@ let rec classify_vernac e =
     | VernacUnsetOption (["Silent"]|["Undo"]|["Printing";"Depth"])
     | VernacSetOption   ((["Silent"]|["Undo"]|["Printing";"Depth"]),_)
       when !Flags.print_emacs -> VtStm(VtPG,false), VtNow
+    (* Univ poly compatibility: we run it now, so that we can just
+     * look at Flags in stm.ml.  Would be nicer to have the stm
+     * look at the entire dag to detect this option. *)
+    | VernacSetOption (["Universe"; "Polymorphism"],_)
+    | VernacUnsetOption (["Universe"; "Polymorphism"]) -> VtSideff [], VtNow
     (* Stm *)
     | VernacStm Finish -> VtStm (VtFinish, true), VtNow
     | VernacStm Wait -> VtStm (VtWait, true), VtNow
@@ -151,8 +156,8 @@ let rec classify_vernac e =
         let ids = List.map snd (CList.map_filter (fun (x,_) -> x) l) in
         VtSideff ids, VtLater
     | VernacCombinedScheme ((_,id),_) -> VtSideff [id], VtLater
+    | VernacBeginSection (_,id) -> VtSideff [id], VtLater
     | VernacUniverse _ | VernacConstraint _
-    | VernacBeginSection _
     | VernacCanonical _ | VernacCoercion _ | VernacIdentityCoercion _
     | VernacAddLoadPath _ | VernacRemoveLoadPath _ | VernacAddMLPath _
     | VernacChdir _ 

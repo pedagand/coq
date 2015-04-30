@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -21,7 +21,6 @@ open Libnames
 (** {6 ... } *)
 (** Require = load in the environment + open (if the optional boolean
     is not [None]); mark also for export if the boolean is [Some true] *)
-val require_library : qualid located list -> bool option -> unit
 val require_library_from_dirpath : (DirPath.t * string) list -> bool option -> unit
 val require_library_from_file :
   Id.t option -> CUnix.physical_path -> bool option -> unit
@@ -37,14 +36,14 @@ type seg_proofs = Term.constr Future.computation array
 
 (** Open a module (or a library); if the boolean is true then it's also
    an export otherwise just a simple import *)
-val import_module : bool -> qualid located -> unit
+val import_module : bool -> qualid located list -> unit
 
 (** {6 Start the compilation of a library } *)
 val start_library : string -> DirPath.t * string
 
 (** {6 End the compilation of a library and save it to a ".vo" file } *)
 val save_library_to :
-  ?todo:((Future.UUID.t,'document) Stateid.request list * 'counters) ->
+  ?todo:(((Future.UUID.t,'document) Stateid.request * bool) list * 'counters) ->
   DirPath.t -> string -> Opaqueproof.opaquetab -> unit
 
 val load_library_todo :
@@ -73,8 +72,17 @@ exception LibNotFound
 type library_location = LibLoaded | LibInPath
 
 val locate_qualified_library :
-  bool -> qualid -> library_location * DirPath.t * CUnix.physical_path
-val try_locate_qualified_library : qualid located -> DirPath.t * string
+  ?root:DirPath.t -> ?warn:bool -> qualid ->
+  library_location * DirPath.t * CUnix.physical_path
+(** Locates a library by implicit name.
+
+  @raise LibUnmappedDir if the library is not in the path
+  @raise LibNotFound if there is no corresponding file in the path
+
+*)
 
 (** {6 Statistics: display the memory use of a library. } *)
 val mem : DirPath.t -> Pp.std_ppcmds
+
+(** {6 Native compiler. } *)
+val native_name_from_filename : string -> string

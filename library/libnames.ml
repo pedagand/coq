@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -31,6 +31,11 @@ let pop_dirpath_n n dir = DirPath.make (List.skipn n (DirPath.repr dir))
 let is_dirpath_prefix_of d1 d2 =
   List.prefix_of Id.equal
     (List.rev (DirPath.repr d1)) (List.rev (DirPath.repr d2))
+
+let is_dirpath_suffix_of dir1 dir2 =
+  let dir1 = DirPath.repr dir1 in
+  let dir2 = DirPath.repr dir2 in
+  List.prefix_of Id.equal dir1 dir2
 
 let chop_dirpath n d =
   let d1,d2 = List.chop n (List.rev (DirPath.repr d)) in

@@ -1,18 +1,15 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
 (************************************************************************)
 
 open Util
-open Pp
 open Names
 open Term
-open Context
 open Environ
-open Locus
 open Univ
 
 (** Universes *)
@@ -22,6 +19,8 @@ type universe_names =
 
 val global_universe_names : unit -> universe_names
 val set_global_universe_names : universe_names -> unit
+
+val pr_with_global_universes : Level.t -> Pp.std_ppcmds
 
 (** The global universe counter *)
 val set_remote_new_univ_level : universe_level RemoteCounter.installer

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -53,7 +53,7 @@ val definition_entry : ?opaque:bool -> ?inline:bool -> ?types:types ->
   constr -> definition_entry
 
 val declare_constant :
- ?internal:internal_flag -> ?local:bool -> Id.t -> constant_declaration -> constant
+ ?internal:internal_flag -> ?local:bool -> Id.t -> ?export_seff:bool -> constant_declaration -> constant
 
 val declare_definition : 
   ?internal:internal_flag -> ?opaque:bool -> ?kind:definition_object_kind ->

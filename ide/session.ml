@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -18,6 +18,7 @@ class type ['a] page =
     inherit GObj.widget
     method update : 'a -> unit
     method on_update : callback:('a -> unit) -> unit
+    method refresh_color : unit -> unit
   end
 
 class type control =
@@ -133,6 +134,11 @@ let set_buffer_handlers
     try ignore(buffer#get_mark (`NAME "stop_of_input"))
     with GText.No_such_mark _ -> assert false in
   let get_insert () = buffer#get_iter_at_mark `INSERT in
+  let update_prev it =
+    let prev = buffer#get_iter_at_mark (`NAME "prev_insert") in
+    if it#offset < prev#offset then
+      buffer#move_mark (`NAME "prev_insert") ~where:it
+  in
   let debug_edit_zone () = if false (*!Minilib.debug*) then begin
     buffer#remove_tag Tags.Script.edit_zone
       ~start:buffer#start_iter ~stop:buffer#end_iter;
@@ -147,10 +153,9 @@ let set_buffer_handlers
   let insert_cb it s = if String.length s = 0 then () else begin
     Minilib.log ("insert_cb " ^ string_of_int it#offset);
     let text_mark = add_mark it in
+    let () = update_prev it in
     if it#has_tag Tags.Script.to_process then
       cancel_signal "Altering the script being processed in not implemented"
-    else if it#has_tag Tags.Script.read_only then
-      cancel_signal "Altering read_only text not allowed"
     else if it#has_tag Tags.Script.processed then
       call_coq_or_cancel_action (coqops#go_to_mark (`MARK text_mark))
     else if it#has_tag Tags.Script.error_bg then begin
@@ -160,16 +165,14 @@ let set_buffer_handlers
     end end in
   let delete_cb ~start ~stop =
     Minilib.log (Printf.sprintf "delete_cb %d %d" start#offset stop#offset);
-    cur_action := new_action_id ();
     let min_iter, max_iter =
       if start#compare stop < 0 then start, stop else stop, start in
+    let () = update_prev min_iter in
     let text_mark = add_mark min_iter in
     let rec aux min_iter =
       if min_iter#equal max_iter then ()
       else if min_iter#has_tag Tags.Script.to_process then
         cancel_signal "Altering the script being processed in not implemented"
-      else if min_iter#has_tag Tags.Script.read_only then
-        cancel_signal "Altering read_only text not allowed"
       else if min_iter#has_tag Tags.Script.processed then
         call_coq_or_cancel_action (coqops#go_to_mark (`MARK text_mark))
       else if min_iter#has_tag Tags.Script.error_bg then
@@ -250,6 +253,10 @@ let make_table_widget cd cb =
       ~rules_hint:true ~headers_visible:false
       ~model:store ~packing:frame#add () in
   let () = data#set_headers_visible true in
+  let refresh () =
+    let clr = Tags.color_of_string current.background_color in
+    data#misc#modify_base [`NORMAL, `COLOR clr]
+  in
   let mk_rend c = GTree.cell_renderer_text [], ["text",c] in
   let cols =
     List.map2 (fun (_,c) (_,n,v) ->
@@ -265,10 +272,10 @@ let make_table_widget cd cb =
   ignore(
     data#connect#row_activated ~callback:(fun tp vc -> cb columns store tp vc)
   );
-  frame, (fun f -> f columns store)
+  frame, (fun f -> f columns store), refresh
 
 let create_errpage (script : Wg_ScriptView.script_view) : errpage =
-  let table, access =
+  let table, access, refresh =
     make_table_widget
       [`Int,"Line",true; `String,"Error message",true]
       (fun columns store tp vc ->
@@ -299,10 +306,11 @@ let create_errpage (script : Wg_ScriptView.script_view) : errpage =
           errs
       end
     method on_update ~callback:cb = callback := cb
+    method refresh_color () = refresh ()
   end
 
 let create_jobpage coqtop coqops : jobpage =
-  let table, access =
+  let table, access, refresh =
     make_table_widget
       [`String,"Worker",true; `String,"Job name",true]
       (fun columns store tp vc ->
@@ -338,6 +346,7 @@ let create_jobpage coqtop coqops : jobpage =
           jobs
       end
     method on_update ~callback:cb = callback := cb
+    method refresh_color () = refresh ()
   end
 
 let create_proof () =
@@ -465,7 +474,7 @@ let build_layout (sn:session) =
       message_frame#misc#show ();
       detachable#show);
     detachable#button#misc#hide ();
-    lbl in
+    detachable, lbl in
   let session_tab = GPack.hbox ~homogeneous:false () in
   let img = GMisc.image ~icon_size:`SMALL_TOOLBAR
     ~packing:session_tab#pack () in
@@ -496,9 +505,17 @@ let build_layout (sn:session) =
   sn.command#pack_in (session_paned#pack2 ~shrink:false ~resize:false);
   script_scroll#add sn.script#coerce;
   proof_scroll#add sn.proof#coerce;
-  ignore(add_msg_page 0 sn.tab_label#text "Messages" sn.messages#coerce);
-  let label = add_msg_page 1 sn.tab_label#text "Errors" sn.errpage#coerce in
-  ignore(add_msg_page 2 sn.tab_label#text "Jobs" sn.jobpage#coerce);
+  let detach, _ = add_msg_page 0 sn.tab_label#text "Messages" sn.messages#coerce in
+  let _, label = add_msg_page 1 sn.tab_label#text "Errors" sn.errpage#coerce in
+  let _, _ = add_msg_page 2 sn.tab_label#text "Jobs" sn.jobpage#coerce in
+  (** When a message is received, focus on the message pane *)
+  let _ =
+    sn.messages#connect#pushed ~callback:(fun _ _ ->
+      let num = message_frame#page_num detach#coerce in
+      if 0 <= num then message_frame#goto_page num
+    )
+  in
+  (** When an error occurs, paint the error label in red *)
   let txt = label#text in
   let red s = "<span foreground=\"#FF0000\">" ^ s ^ "</span>" in
   sn.errpage#on_update ~callback:(fun l ->

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -100,7 +100,7 @@ let retype ?(polyprop=true) sigma =
     | Ind ind -> rename_type_of_inductive env ind
     | Construct cstr -> rename_type_of_constructor env cstr
     | Case (_,p,c,lf) ->
-        let Inductiveops.IndType(_,realargs) =
+        let Inductiveops.IndType(indf,realargs) =
           let t = type_of env c in
           try Inductiveops.find_rectype env sigma t
           with Not_found ->
@@ -109,7 +109,8 @@ let retype ?(polyprop=true) sigma =
             Inductiveops.find_rectype env sigma t
           with Not_found -> retype_error BadRecursiveType
         in
-        let t = whd_beta sigma (applist (p, realargs)) in
+        let n = inductive_nrealdecls_env env (fst (fst (dest_ind_family indf))) in
+        let t = betazetaevar_applist sigma n p realargs in
         (match kind_of_term (whd_betadeltaiota env sigma (type_of env t)) with
           | Prod _ -> whd_beta sigma (applist (t, [c]))
           | _ -> t)

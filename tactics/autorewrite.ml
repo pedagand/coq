@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -211,6 +211,7 @@ let cache_hintrewrite (_,(rbase,lrl)) =
   let base = try raw_find_base rbase with Not_found -> HintDN.empty in
   let max = try fst (Util.List.last (HintDN.find_all base)) with Failure _ -> 0
   in
+  let lrl = HintDN.refresh_metas lrl in
   let lrl = HintDN.map (fun (i,h) -> (i + max, h)) lrl in
     rewtab:=String.Map.add rbase (HintDN.union lrl base) !rewtab
 

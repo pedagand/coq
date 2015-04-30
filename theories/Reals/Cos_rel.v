@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -10,7 +10,7 @@ Require Import Rbase.
 Require Import Rfunctions.
 Require Import SeqSeries.
 Require Import Rtrigo_def.
-Require Import Omega.
+Require Import OmegaTactic.
 Local Open Scope R_scope.
 
 Definition A1 (x:R) (N:nat) : R :=
@@ -50,6 +50,7 @@ Theorem cos_plus_form :
  forall (x y:R) (n:nat),
    (0 < n)%nat ->
    A1 x (S n) * A1 y (S n) - B1 x n * B1 y n + Reste x y n = C1 x y (S n).
+Proof.
 intros.
 unfold A1, B1.
 rewrite
@@ -251,12 +252,14 @@ apply lt_O_Sn.
 Qed.
 
 Lemma pow_sqr : forall (x:R) (i:nat), x ^ (2 * i) = (x * x) ^ i.
+Proof.
 intros.
 assert (H := pow_Rsqr x i).
 unfold Rsqr in H; exact H.
 Qed.
 
 Lemma A1_cvg : forall x:R, Un_cv (A1 x) (cos x).
+Proof.
 intro.
 unfold cos; destruct (exist_cos (Rsqr x)) as (x0,p).
 unfold cos_in, cos_n, infinite_sum, R_dist in p.
@@ -276,6 +279,7 @@ apply pow_sqr.
 Qed.
 
 Lemma C1_cvg : forall x y:R, Un_cv (C1 x y) (cos (x + y)).
+Proof.
 intros.
 unfold cos.
 destruct (exist_cos (Rsqr (x + y))) as (x0,p).
@@ -298,6 +302,7 @@ apply pow_sqr.
 Qed.
 
 Lemma B1_cvg : forall x:R, Un_cv (B1 x) (sin x).
+Proof.
 intro.
 case (Req_dec x 0); intro.
 rewrite H.

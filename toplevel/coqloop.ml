@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -20,7 +20,7 @@ type input_buffer = {
   mutable prompt : unit -> string;
   mutable str : string; (* buffer of already read characters *)
   mutable len : int;    (* number of chars in the buffer *)
-  mutable bols : int list; (* offsets in str of begining of lines *)
+  mutable bols : int list; (* offsets in str of beginning of lines *)
   mutable tokens : Gram.parsable; (* stream of tokens *)
   mutable start : int } (* stream count of the first char of the buffer *)
 
@@ -31,7 +31,7 @@ let resize_buffer ibuf =
   String.blit ibuf.str 0 nstr 0 (String.length ibuf.str);
   ibuf.str <- nstr
 
-(* Delete all irrelevent lines of the input buffer. Keep the last line
+(* Delete all irrelevant lines of the input buffer. Keep the last line
    in the buffer (useful when there are several commands on the same line. *)
 
 let resynch_buffer ibuf =
@@ -280,7 +280,7 @@ let parse_to_dot =
   in
   Gram.Entry.of_parser "Coqtoplevel.dot" dot
 
-(* If an error occured while parsing, we try to read the input until a dot
+(* If an error occurred while parsing, we try to read the input until a dot
    token is encountered.
    We assume that when a lexer error occurs, at least one char was eaten *)
 
@@ -306,7 +306,7 @@ let read_sentence () =
     - End_of_input: Ctrl-D was typed in, we will quit.
 
     In particular, this is normally the only place where a Sys.Break
-    is catched and handled (i.e. not re-raised).
+    is caught and handled (i.e. not re-raised).
 *)
 
 let do_vernac () =

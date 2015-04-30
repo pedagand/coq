@@ -39,9 +39,9 @@ End A.
 
 (* 2- This was submitted by Andrew Appel *)
 
-Require Import Program Relations.
-
 Module B.
+
+Require Import Program Relations.
 
 Record ageable_facts (A:Type) (level: A -> nat) (age1:A -> option A)  :=
 { af_unage : forall x x' y', level x' = level y' -> age1 x = Some x' -> exists y, age1 y = Some y'
@@ -122,8 +122,8 @@ Require Import Setoid.
 Module C.
 
 Reserved Notation "a ~> b" (at level 70, right associativity).
-Reserved Notation "a ∘ b" (at level 45).
 Reserved Notation "a ≈ b" (at level 54).
+Reserved Notation "a ∘ b" (at level 50, left associativity).
 Generalizable All Variables.
 
 Class Category (Object:Type) (Hom:Object -> Object -> Type) := {
@@ -193,7 +193,7 @@ Definition skel {A:Type} : relation A := @eq A.
 Instance skel_equiv A : Equivalence (@skel A).
 Admitted.
 
-Require Import FunctionalExtensionality.
+Import FunctionalExtensionality.
 Instance set_cat : Category Type (fun A B => A -> B) := {
   id := fun A => fun x => x
   ; comp c b a f g := fun x => f (g x)
@@ -205,7 +205,7 @@ intros. compute. reflexivity. Defined.
 
 (* The [list] type constructor is a Functor. *)
 
-Require Import List.
+Import List.
 
 Definition setList (A:set_cat) := list A.
 Instance list_functor : Functor set_cat set_cat setList.

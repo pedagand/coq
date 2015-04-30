@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -78,7 +78,7 @@ let show_universes () =
   let ctx = Evd.universe_context_set (Evd.nf_constraints sigma) in
   let cstrs = Univ.merge_constraints (Univ.ContextSet.constraints ctx) Univ.empty_universes in
     msg_notice (Evd.pr_evar_universe_context (Evd.evar_universe_context sigma));
-    msg_notice (str"Normalized constraints: " ++ Univ.pr_universes cstrs)
+    msg_notice (str"Normalized constraints: " ++ Univ.pr_universes (Evd.pr_evd_level sigma) cstrs)
 
 let show_prooftree () =
   (* Spiwack: proof tree is currently not working *)
@@ -387,12 +387,13 @@ let err_unmapped_library loc qid =
        pr_dirpath dir ++ str".")
 
 let err_notfound_library loc qid =
-  msg_error
-    (hov 0 (strbrk "Unable to locate library " ++ pr_qualid qid ++ str"."))
+  user_err_loc
+    (loc,"locate_library",
+     strbrk "Unable to locate library " ++ pr_qualid qid ++ str".")
 
 let print_located_library r =
   let (loc,qid) = qualid_of_reference r in
-  try msg_found_library (Library.locate_qualified_library false qid)
+  try msg_found_library (Library.locate_qualified_library ~warn:false qid)
   with
     | Library.LibUnmappedDir -> err_unmapped_library loc qid
     | Library.LibNotFound -> err_notfound_library loc qid
@@ -496,7 +497,7 @@ let vernac_exact_proof c =
   (* spiwack: for simplicity I do not enforce that "Proof proof_term" is
      called only at the begining of a proof. *)
   let status = by (Tactics.New.exact_proof c) in
-  save_proof (Vernacexpr.Proved(true,None));
+  save_proof (Vernacexpr.(Proved(Opaque None,None)));
   if not status then Pp.feedback Feedback.AddedAxiom
 
 let vernac_assumption locality poly (local, kind) l nl =
@@ -598,11 +599,8 @@ let vernac_constraint l = do_constraint l
 (* Modules            *)
 
 let vernac_import export refl =
-  let import ref =
-    Library.import_module export (qualid_of_reference ref)
-  in
-    List.iter import refl;
-    Lib.add_frozen_state ()
+  Library.import_module export (List.map qualid_of_reference refl);
+  Lib.add_frozen_state ()
 
 let vernac_declare_module export (loc, id) binders_ast mty_ast =
   (* We check the state of the system (in section, in module type)
@@ -752,9 +750,25 @@ let vernac_end_segment (_,id as lid) =
 
 (* Libraries *)
 
-let vernac_require import qidl =
+let vernac_require from import qidl =
   let qidl = List.map qualid_of_reference qidl in
-  let modrefl = List.map Library.try_locate_qualified_library qidl in
+  let root = match from with
+  | None -> None
+  | Some from ->
+    let (_, qid) = Libnames.qualid_of_reference from in
+    let (hd, tl) = Libnames.repr_qualid qid in
+    Some (Libnames.add_dirpath_suffix hd tl)
+  in
+  let locate (loc, qid) =
+    try
+      let warn = Flags.is_verbose () in
+      let (_, dir, f) = Library.locate_qualified_library ?root ~warn qid in
+      (dir, f)
+    with
+      | Library.LibUnmappedDir -> err_unmapped_library loc qid
+      | Library.LibNotFound -> err_notfound_library loc qid
+  in
+  let modrefl = List.map locate qidl in
   if Dumpglob.dump () then
     List.iter2 (fun (loc, _) dp -> Dumpglob.dump_libref loc dp "lib") qidl (List.map fst modrefl);
   Library.require_library_from_dirpath modrefl import
@@ -878,11 +892,10 @@ let vernac_set_used_variables e =
 let expand filename =
   Envars.expand_path_macros ~warn:(fun x -> msg_warning (str x)) filename
 
-let vernac_add_loadpath isrec pdir ldiropt =
+let vernac_add_loadpath implicit pdir ldiropt =
   let pdir = expand pdir in
   let alias = Option.default Nameops.default_root_prefix ldiropt in
-  (if isrec then Mltop.add_rec_path else Mltop.add_path)
-    ~unix_path:pdir ~coq_root:alias ~implicit:true
+  Mltop.add_rec_path ~unix_path:pdir ~coq_root:alias ~implicit
 
 let vernac_remove_loadpath path =
   Loadpath.remove_load_path (expand path)
@@ -963,20 +976,27 @@ let register_ltac local isrec tacl =
     (name, body)
   in
   let rfun = List.map map tacl in
-  let ltacrecvars =
+  let recvars =
     let fold accu (op, _) = match op with
     | UpdateTac _ -> accu
-    | NewTac id -> Id.Map.add id (Lib.make_kn id) accu
+    | NewTac id -> (Lib.make_path id, Lib.make_kn id) :: accu
     in
-    if isrec then List.fold_left fold Id.Map.empty rfun
-    else Id.Map.empty
+    if isrec then List.fold_left fold [] rfun
+    else []
   in
-  let ist = { (Tacintern.make_empty_glob_sign ()) with Genintern.ltacrecvars; } in
+  let ist = Tacintern.make_empty_glob_sign () in
   let map (name, body) =
     let body = Flags.with_option Tacintern.strict_check (Tacintern.intern_tactic_or_tacarg ist) body in
     (name, body)
   in
-  let defs = List.map map rfun in
+  let defs () =
+    (** Register locally the tactic to handle recursivity. This function affects
+        the whole environment, so that we transactify it afterwards. *)
+    let iter_rec (sp, kn) = Nametab.push_tactic (Nametab.Until 1) sp kn in
+    let () = List.iter iter_rec recvars in
+    List.map map rfun
+  in
+  let defs = Future.transactify defs () in
   let iter (def, tac) = match def with
   | NewTac id ->
     Tacenv.register_ltac false local id tac;
@@ -1124,6 +1144,7 @@ let vernac_declare_arguments locality r l nargs flags =
     vernac_declare_implicits locality r implicits;
   if nargs >= 0 && nargs < List.fold_left max 0 rargs then
     error "The \"/\" option must be placed after the last \"!\".";
+  let no_flags = List.is_empty flags in
   let rec narrow = function
     | #Reductionops.ReductionBehaviour.flag as x :: tl -> x :: narrow tl
     | [] -> [] | _ :: tl -> narrow tl in
@@ -1141,7 +1162,7 @@ let vernac_declare_arguments locality r l nargs flags =
           some_implicits_specified ||
           some_scopes_specified ||
           some_simpl_flags_specified) &&
-     List.length flags = 0 then
+     no_flags then
     msg_warning (strbrk "This command is just asserting the number and names of arguments of " ++ pr_global sr ++ strbrk". If this is what you want add ': assert' to silence the warning. If you want to clear implicit arguments add ': clear implicits'. If you want to clear notation scopes add ': clear scopes'")
 
 
@@ -1503,7 +1524,7 @@ let vernac_check_may_eval redexp glopt rc =
   Evarconv.check_problems_are_solved env sigma';
   let sigma',nf = Evarutil.nf_evars_and_universes sigma' in
   let uctx = Evd.universe_context sigma' in
-  let env = Environ.push_context uctx env in
+  let env = Environ.push_context uctx (Evarutil.nf_env_evar sigma' env) in
   let c = nf c in
   let j =
     if Evarutil.has_undefined_evars sigma' c then
@@ -1516,12 +1537,8 @@ let vernac_check_may_eval redexp glopt rc =
         let l = Evar.Set.union (Evd.evars_of_term j.Environ.uj_val) (Evd.evars_of_term j.Environ.uj_type) in
         let j = { j with Environ.uj_type = Reductionops.nf_betaiota sigma' j.Environ.uj_type } in
 	msg_notice (print_judgment env sigma' j ++
-                    (if l != Evar.Set.empty then
-                        let l = Evar.Set.fold (fun ev -> Evar.Map.add ev (Evarutil.nf_evar_info sigma' (Evd.find sigma' ev))) l Evar.Map.empty in
-                        (fnl () ++ str "where" ++ fnl () ++ pr_evars sigma' l)
-                     else
-                        mt ()) ++
-                     Printer.pr_universe_ctx uctx)
+                    pr_ne_evar_set (fnl () ++ str "where" ++ fnl ()) (mt ()) sigma' l ++
+                    Printer.pr_universe_ctx uctx)
     | Some r ->
         Tacintern.dump_glob_red_expr r;
         let (sigma',r_interp) = interp_redexp env sigma' r in
@@ -1604,7 +1621,7 @@ let vernac_print = function
   | PrintUniverses (b, None) ->
     let univ = Global.universes () in
     let univ = if b then Univ.sort_universes univ else univ in
-    msg_notice (Univ.pr_universes univ)
+    msg_notice (Univ.pr_universes Universes.pr_with_global_universes univ)
   | PrintUniverses (b, Some s) -> dump_universes b s
   | PrintHint r -> msg_notice (Hints.pr_hint_ref (smart_global r))
   | PrintHintGoal -> msg_notice (Hints.pr_applicable_hint ())
@@ -1883,7 +1900,7 @@ let interp ?proof locality poly c =
 
   | VernacNameSectionHypSet (lid, set) -> vernac_name_sec_hyp lid set
 
-  | VernacRequire (export, qidl) -> vernac_require export qidl
+  | VernacRequire (from, export, qidl) -> vernac_require from export qidl
   | VernacImport (export,qidl) -> vernac_import export qidl
   | VernacCanonical qid -> vernac_canonical qid
   | VernacCoercion (local,r,s,t) -> vernac_coercion locality poly local r s t
@@ -1951,14 +1968,16 @@ let interp ?proof locality poly c =
   | VernacComments l -> if_verbose msg_info (str "Comments ok\n")
   | VernacNop -> ()
 
+  (* The STM should handle that, but LOAD bypasses the STM... *)
+  | VernacAbort id -> msg_warning (str "VernacAbort not handled by Stm")
+  | VernacAbortAll -> msg_warning (str "VernacAbortAll not handled by Stm")
+  | VernacRestart -> msg_warning (str "VernacRestart not handled by Stm")
+  | VernacUndo _ -> msg_warning (str "VernacUndo not handled by Stm")
+  | VernacUndoTo _ -> msg_warning (str "VernacUndoTo not handled by Stm")
+  | VernacBacktrack _ -> msg_warning (str "VernacBacktrack not handled by Stm")
+  
   (* Proof management *)
   | VernacGoal t -> vernac_start_proof poly Theorem [None,([],t,None)] false
-  | VernacAbort id -> anomaly (str "VernacAbort not handled by Stm")
-  | VernacAbortAll -> anomaly (str "VernacAbortAll not handled by Stm")
-  | VernacRestart -> anomaly (str "VernacRestart not handled by Stm")
-  | VernacUndo _ -> anomaly (str "VernacUndo not handled by Stm")
-  | VernacUndoTo _ -> anomaly (str "VernacUndoTo not handled by Stm")
-  | VernacBacktrack _ -> anomaly (str "VernacBacktrack not handled by Stm")
   | VernacFocus n -> vernac_focus n
   | VernacUnfocus -> vernac_unfocus ()
   | VernacUnfocused -> vernac_unfocused ()
@@ -2061,7 +2080,7 @@ let locate_if_not_already loc (e, info) =
   | Some l -> if Loc.is_ghost l then (e, Loc.add_loc info loc) else (e, info)
 
 exception HasNotFailed
-exception HasFailed of string
+exception HasFailed of std_ppcmds
 
 let with_fail b f =
   if not b then f ()
@@ -2076,8 +2095,8 @@ let with_fail b f =
            | HasNotFailed as e -> raise e
            | e ->
               let e = Errors.push e in
-              raise (HasFailed (Pp.string_of_ppcmds
-              (Errors.iprint (Cerrors.process_vernac_interp_error e)))))
+              raise (HasFailed (Errors.iprint
+                (Cerrors.process_vernac_interp_error ~with_header:false e))))
         ()
     with e when Errors.noncritical e -> 
       let (e, _) = Errors.push e in
@@ -2086,8 +2105,7 @@ let with_fail b f =
           errorlabstrm "Fail" (str "The command has not failed!")
       | HasFailed msg ->
           if is_verbose () || !Flags.ide_slave then msg_info
-    	(str "The command has indeed failed with message:" ++
-    	 fnl () ++ str "=> " ++ hov 0 (str msg))
+            (str "The command has indeed failed with message:" ++ fnl () ++ msg)
       | _ -> assert false
   end
 

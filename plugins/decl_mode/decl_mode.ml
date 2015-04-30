@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -89,24 +89,21 @@ let get_info sigma gl=
 let try_get_info sigma gl =
   Store.get (Goal.V82.extra sigma gl) info
 
-let get_stack pts =
+let get_goal_stack pts =
   let { it = goals ; sigma = sigma } = Proof.V82.subgoals pts in
   let info = get_info sigma (List.hd goals) in
   info.pm_stack
 
 
 let proof_focus = Proof.new_focus_kind ()
-let proof_cond = Proof.no_cond proof_focus
+let proof_cond = Proof.done_cond proof_focus
 
 let focus p =
-  let inf = get_stack p in
+  let inf = get_goal_stack p in
   Proof_global.simple_with_current_proof (fun _ -> Proof.focus proof_cond inf 1)
 
 let unfocus () =
   Proof_global.simple_with_current_proof (fun _ p -> Proof.unfocus proof_focus p ())
-
-let maximal_unfocus () = 
-  Proof_global.simple_with_current_proof (fun _ -> Proof.maximal_unfocus proof_focus)
 
 let get_top_stack pts =
   try
@@ -116,7 +113,24 @@ let get_top_stack pts =
     let info = get_info sigma gl in
     info.pm_stack
 
+let get_stack pts = Proof.get_at_focus proof_focus pts
+
 let get_last env = match Environ.named_context env with
   | (id,_,_)::_ -> id
   | [] -> error "no previous statement to use"
 
+
+let get_end_command pts =
+  match get_top_stack pts with
+  | [] -> "\"end proof\""
+  | Claim::_ -> "\"end claim\""
+  | Focus_claim::_-> "\"end focus\""
+  | Suppose_case :: Per (et,_,_,_) :: _ | Per (et,_,_,_) :: _  ->
+      begin
+	match et with
+	  Decl_expr.ET_Case_analysis ->
+	    "\"end cases\" or start a new case"
+	| Decl_expr.ET_Induction ->
+	    "\"end induction\" or start a new case"
+      end
+  | _ -> anomaly (Pp.str"lonely suppose")

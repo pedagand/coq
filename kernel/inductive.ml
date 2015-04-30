@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -53,20 +53,11 @@ let inductive_params (mib,_) = mib.mind_nparams
 let inductive_paramdecls (mib,u) = 
   Vars.subst_instance_context u mib.mind_params_ctxt
 
-let inductive_instance mib =
-  if mib.mind_polymorphic then
-    UContext.instance mib.mind_universes
-  else Instance.empty
-
-let inductive_context mib =
-  if mib.mind_polymorphic then 
-    instantiate_univ_context mib.mind_universes 
-  else UContext.empty
-
 let instantiate_inductive_constraints mib u =
   if mib.mind_polymorphic then
-    subst_instance_constraints u (UContext.constraints mib.mind_universes)
-  else Constraint.empty
+    Univ.subst_instance_constraints u (Univ.UContext.constraints mib.mind_universes)
+  else Univ.Constraint.empty
+
 
 (************************************************************************)
 
@@ -373,7 +364,7 @@ let build_branches_type (ind,u) (_,mip as specif) params p =
       let cstr = ith_constructor_of_inductive ind (i+1) in
       let dep_cstr = applist (mkConstructU (cstr,u),lparams@(local_rels args)) in
       vargs @ [dep_cstr] in
-    let base = beta_appvect (lift nargs p) (Array.of_list cargs) in
+    let base = betazeta_appvect mip.mind_nrealdecls (lift nargs p) (Array.of_list cargs) in
     it_mkProd_or_LetIn base args in
   Array.mapi build_one_branch mip.mind_nf_lc
 
@@ -394,7 +385,7 @@ let type_case_branches env (pind,largs) pj c =
 
 
 (************************************************************************)
-(* Checking the case annotation is relevent *)
+(* Checking the case annotation is relevant *)
 
 let check_case_info env (indsp,u) ci =
   let (mib,mip as spec) = lookup_mind_specif env indsp in
@@ -455,13 +446,6 @@ type subterm_spec =
   | Not_subterm
 
 let eq_wf_paths = Rtree.equal Declareops.eq_recarg
-
-let pp_recarg = function
-  | Norec -> Pp.str "Norec"
-  | Mrec i -> Pp.str ("Mrec "^MutInd.to_string (fst i))
-  | Imbr i -> Pp.str ("Imbr "^MutInd.to_string (fst i))
-
-let pp_wf_paths = Rtree.pp_tree pp_recarg
 
 let inter_recarg r1 r2 = match r1, r2 with
 | Norec, Norec -> Some r1
@@ -637,7 +621,7 @@ let abstract_mind_lc ntyps npars lc =
 (* [get_recargs_approx env tree ind args] builds an approximation of the recargs
 tree for ind, knowing args. The argument tree is used to know when candidate
 nested types should be traversed, pruning the tree otherwise. This code is very
-close to check_positive in indtypes.ml, but does no positivy check and does not
+close to check_positive in indtypes.ml, but does no positivity check and does not
 compute the number of recursive arguments. *)
 let get_recargs_approx env tree ind args =
   let rec build_recargs (env, ra_env as ienv) tree c =
@@ -662,7 +646,7 @@ let get_recargs_approx env tree ind args =
        mk_norec
 
   and build_recargs_nested (env,ra_env as ienv) tree (((mind,i),u), largs) =
-    (* If the infered tree already disallows recursion, no need to go further *)
+    (* If the inferred tree already disallows recursion, no need to go further *)
     if eq_wf_paths tree mk_norec then tree
     else
     let mib = Environ.lookup_mind mind env in

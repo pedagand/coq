@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -54,6 +54,9 @@ let wit_open_constr = unsafe_of_type OpenConstrArgType
 let wit_constr_with_bindings = unsafe_of_type ConstrWithBindingsArgType
 
 let wit_bindings = unsafe_of_type BindingsArgType
+
+let wit_hyp_location_flag : 'a Genarg.uniform_genarg_type =
+  Genarg.make0 None "hyp_location_flag"
 
 let wit_red_expr = unsafe_of_type RedExprArgType
 

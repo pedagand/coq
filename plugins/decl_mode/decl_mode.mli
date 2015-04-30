@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -72,8 +72,8 @@ val get_last:  Environ.env -> Id.t
 (** [get_last] raises a [UserError] when it cannot find a previous
     statement in the environment. *)
 
+val get_end_command : Proof.proof -> string
+
 val focus : Proof.proof -> unit
 
 val unfocus : unit -> unit
-
-val maximal_unfocus : unit -> unit

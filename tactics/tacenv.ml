@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -47,7 +47,7 @@ let pr_tacname t =
 
 let tac_tab = ref MLTacMap.empty
 
-let register_ml_tactic ?(overwrite = false) s (t : ml_tactic) =
+let register_ml_tactic ?(overwrite = false) s (t : ml_tactic array) =
   let () =
     if MLTacMap.mem s !tac_tab then
       if overwrite then
@@ -58,9 +58,11 @@ let register_ml_tactic ?(overwrite = false) s (t : ml_tactic) =
   in
   tac_tab := MLTacMap.add s t !tac_tab
 
-let interp_ml_tactic s =
+let interp_ml_tactic { mltac_name = s; mltac_index = i } =
   try
-    MLTacMap.find s !tac_tab
+    let tacs = MLTacMap.find s !tac_tab in
+    let () = if Array.length tacs <= i then raise Not_found in
+    tacs.(i)
   with Not_found ->
     Errors.errorlabstrm ""
       (str "The tactic " ++ str (pr_tacname s) ++ str " is not installed.")
@@ -71,7 +73,6 @@ let interp_ml_tactic s =
 (* Summary and Object declaration *)
 
 open Nametab
-open Libnames
 open Libobject
 
 let mactab =
@@ -84,7 +85,6 @@ let is_ltac_for_ml_tactic r = fst (KNmap.find r !mactab)
 
 (* Declaration of the TAC-DEFINITION object *)
 let add (kn,td) = mactab := KNmap.add kn td !mactab
-let replace (kn,td) = mactab := KNmap.add kn td !mactab
 
 let load_md i ((sp, kn), (local, id, b, t)) = match id with
 | None ->

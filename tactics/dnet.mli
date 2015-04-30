@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -113,6 +113,8 @@ sig
 
   (** apply a function on each identifier and node of terms in a dnet *)
   val map : (ident -> ident) -> (unit structure -> unit structure) -> t -> t
+
+  val map_metas : (meta -> meta) -> t -> t
 end
 
 module Make :

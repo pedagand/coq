@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -79,7 +79,7 @@ let expos   = Str.regexp "^"
 
 let tex_escaped s =
   let dollar = "\\$" and  backslash = "\\\\" and expon = "\\^" in
-  let delims = Str.regexp ("[_{}&%#" ^ dollar ^ backslash ^ expon ^"~ <>']") in
+  let delims = Str.regexp ("[_{}&%#" ^ dollar ^ backslash ^ expon ^"~ <>'`]") in
   let adapt_delim = function
     | "_" | "{" | "}" | "&" | "%" | "#" | "$" as c -> "\\"^c
     | "\\" -> "{\\char'134}"
@@ -89,6 +89,7 @@ let tex_escaped s =
     | "<" -> "{<}"
     | ">" -> "{>}"
     | "'" -> "{\\textquotesingle}"
+    | "`" -> "\\`{}"
     | _ -> assert false
   in
   let adapt = function

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -82,7 +82,7 @@ let search_guard loc env possible_indexes fixdefs =
        iraise (e, info));
     indexes
   else
-    (* we now search recursively amoungst all combinations *)
+    (* we now search recursively among all combinations *)
     (try
        List.iter
 	 (fun l ->
@@ -220,7 +220,7 @@ let process_inference_flags flags env initial_sigma (sigma,c) =
   let c = if flags.expand_evars then nf_evar sigma c else c in
   sigma,c
 
-(* Allow references to syntaxically inexistent variables (i.e., if applied on an inductive) *)
+(* Allow references to syntactically nonexistent variables (i.e., if applied on an inductive) *)
 let allow_anonymous_refs = ref false
 
 (* Utilisé pour inférer le prédicat des Cases *)
@@ -324,12 +324,6 @@ let pretype_id pretype loc env evdref lvar id =
       (* Check if [id] is a section or goal variable *)
       try
 	let (_,_,typ) = lookup_named id env in
-	(* let _ =  *)
-	(*   try  *)
-   	(*     let ctx = Decls.variable_context id in *)
-	(*       evdref := Evd.merge_context_set univ_rigid !evdref ctx; *)
-	(*   with Not_found -> () *)
-	(* in *)
 	  { uj_val  = mkVar id; uj_type = typ }
       with Not_found ->
 	  (* [id] not found, standard error message *)

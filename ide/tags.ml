@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -13,15 +13,23 @@ let make_tag (tt:GText.tag_table) ~name prop =
   tt#add new_tag#as_tag;
   new_tag
 
-let processed_color = ref "light green"
-let processing_color = ref "light blue"
-let error_color = ref "#FFCCCC"
+(* These work fine for colorblind people too *)
+let default_processed_color = "light green"
+let default_processing_color = "light blue"
+let default_error_color = "#FFCCCC"
+let default_error_fg_color = "red"
+let default_color = "cornsilk"
+
+let processed_color = ref default_processed_color
+let processing_color = ref default_processing_color
+let error_color = ref default_error_color
+let error_fg_color = ref default_error_fg_color
 
 module Script =
 struct
   let table = GText.tag_table ()
   let comment = make_tag table ~name:"comment" []
-  let error = make_tag table ~name:"error" [`UNDERLINE `SINGLE ; `FOREGROUND "red"]
+  let error = make_tag table ~name:"error" [`UNDERLINE `SINGLE ; `FOREGROUND !error_fg_color]
   let error_bg = make_tag table ~name:"error_bg" [`BACKGROUND !error_color]
   let to_process = make_tag table ~name:"to_process" [`BACKGROUND !processing_color]
   let processed = make_tag table ~name:"processed" [`BACKGROUND !processed_color]
@@ -44,8 +52,6 @@ struct
     t
   let all = edit_zone :: all
   
-  let read_only = make_tag table ~name:"read_only" [`EDITABLE false ]
-
 end
 module Proof =
 struct
@@ -94,3 +100,11 @@ let set_error_color clr =
   let s = string_of_color clr in
   error_color := s;
   Script.error_bg#set_property (`BACKGROUND s)
+
+let get_error_fg_color () = color_of_string !error_fg_color
+
+let set_error_fg_color clr =
+  let s = string_of_color clr in
+  error_fg_color := s;
+  Script.error#set_property (`FOREGROUND s)
+

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -333,7 +333,7 @@ type ('ty,'a) functorize =
 
 type with_declaration =
   | WithMod of Id.t list * module_path
-  | WithDef of Id.t list * constr
+  | WithDef of Id.t list * (constr * Univ.universe_context)
 
 type module_alg_expr =
   | MEident of module_path
@@ -365,7 +365,7 @@ and module_signature = (module_type_body,structure_body) functorize
 and module_expression = (module_type_body,module_alg_expr) functorize
 
 and module_implementation =
-  | Abstract (** no accessible implementation *)
+  | Abstract (** no accessible implementation (keep this constructor first!) *)
   | Algebraic of module_expression (** non-interactive algebraic expression *)
   | Struct of module_signature (** interactive body *)
   | FullStruct (** special case of [Struct] : the body is exactly [mod_type] *)
@@ -382,18 +382,11 @@ and module_body =
     mod_delta : delta_resolver;
     mod_retroknowledge : action list }
 
-(** A [module_type_body] is similar to a [module_body], with
-    no implementation and retroknowledge fields *)
+(** A [module_type_body] is just a [module_body] with no
+    implementation ([mod_expr] always [Abstract]) and also
+    an empty [mod_retroknowledge] *)
 
-and module_type_body =
-  { typ_mp : module_path; (** path of the module type *)
-    typ_expr : module_signature; (** expanded type *)
-    (** algebraic expression, kept if it's relevant for extraction  *)
-    typ_expr_alg : module_expression option;
-    typ_constraints : Univ.constraints;
-    (** quotiented set of equivalent constants and inductive names *)
-    typ_delta : delta_resolver}
-
+and module_type_body = module_body
 
 (*************************************************************************)
 (** {4 From safe_typing.ml} *)
@@ -404,7 +397,7 @@ type compilation_unit_name = DirPath.t
 
 type vodigest =
   | Dvo of Digest.t              (* The digest of the seg_lib part *)
-  | Dvivo of Digest.t * Digest.t (* The digest of the seg_lib + seg_univ part *)
+  | Dviovo of Digest.t * Digest.t (* The digest of the seg_lib+seg_univ part *)
 
 type library_info = compilation_unit_name * vodigest
 

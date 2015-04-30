@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -1567,7 +1567,6 @@ let internalize globalenv env allow_patvar lvar c =
           let lvars = Id.Set.union lvars env.ids in
           let ist = {
             Genintern.ltacvars = lvars;
-            ltacrecvars = Id.Map.empty;
             genv = globalenv;
           } in
           let (_, glb) = Genintern.generic_intern ist gen in

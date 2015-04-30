@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -230,7 +230,7 @@ let instantiate_possibly_recursive_type indu paramdecls fields =
 let declare_projections indsp ?(kind=StructureComponent) binder_name coers fieldimpls fields =
   let env = Global.env() in
   let (mib,mip) = Global.lookup_inductive indsp in
-  let u = Inductive.inductive_instance mib in
+  let u = Declareops.inductive_instance mib in
   let paramdecls = Inductive.inductive_paramdecls (mib, u) in
   let poly = mib.mind_polymorphic and ctx = Univ.instantiate_univ_context mib.mind_universes in
   let indu = indsp, u in
@@ -472,10 +472,15 @@ let add_inductive_class ind =
   let k =
     let ctx = oneind.mind_arity_ctxt in
     let inst = Univ.UContext.instance mind.mind_universes in
+    let map = function
+    | (_, Some _, _) -> None
+    | (_, None, t) -> Some (lazy t)
+    in
+    let args = List.map_filter map ctx in
     let ty = Inductive.type_of_inductive_knowing_parameters
       (push_rel_context ctx (Global.env ()))
       ((mind,oneind),inst)
-      (Array.map (fun x -> lazy x) (Termops.extended_rel_vect 0 ctx))
+      (Array.of_list args)
     in
       { cl_impl = IndRef ind;
 	cl_context = List.map (const None) ctx, ctx;

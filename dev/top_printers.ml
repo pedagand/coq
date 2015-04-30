@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -22,7 +22,6 @@ open Evd
 open Goptions
 open Genarg
 open Clenv
-open Universes
 
 let _ = Detyping.print_evar_arguments := true
 let _ = Detyping.print_universes := true
@@ -207,21 +206,22 @@ let ppuni u = pp(pr_uni u)
 let ppuni_level u = pp (Level.pr u)
 let ppuniverse u = pp (str"[" ++ Universe.pr u ++ str"]")
 
-let ppuniverse_set l = pp (LSet.pr l)
-let ppuniverse_instance l = pp (Instance.pr l)
-let ppuniverse_context l = pp (pr_universe_context l)
-let ppuniverse_context_set l = pp (pr_universe_context_set l)
+let prlev = Universes.pr_with_global_universes
+let ppuniverse_set l = pp (LSet.pr prlev l)
+let ppuniverse_instance l = pp (Instance.pr prlev l)
+let ppuniverse_context l = pp (pr_universe_context prlev l)
+let ppuniverse_context_set l = pp (pr_universe_context_set prlev l)
 let ppuniverse_subst l = pp (Univ.pr_universe_subst l)
 let ppuniverse_opt_subst l = pp (Universes.pr_universe_opt_subst l)
 let ppuniverse_level_subst l = pp (Univ.pr_universe_level_subst l)
 let ppevar_universe_context l = pp (Evd.pr_evar_universe_context l)
 let ppconstraints_map c = pp (Universes.pr_constraints_map c)
-let ppconstraints c = pp (pr_constraints c)
+let ppconstraints c = pp (pr_constraints Level.pr c)
 let ppuniverseconstraints c = pp (Universes.Constraints.pr c)
 let ppuniverse_context_future c = 
   let ctx = Future.force c in
     ppuniverse_context ctx
-let ppuniverses u = pp (Univ.pr_universes u)
+let ppuniverses u = pp (Univ.pr_universes Level.pr u)
 let ppnamedcontextval e =
   pp (pr_named_context (Global.env ()) Evd.empty (named_context_of_val e))
 
@@ -502,7 +502,7 @@ open Egramml
 
 let _ =
   try
-    Vernacinterp.vinterp_add ("PrintConstr", 0)
+    Vernacinterp.vinterp_add false ("PrintConstr", 0)
       (function
          [c] when genarg_tag c = ConstrArgType && true ->
            let c = out_gen (rawwit wit_constr) c in
@@ -519,7 +519,7 @@ let _ =
 
 let _ =
   try
-    Vernacinterp.vinterp_add ("PrintPureConstr", 0)
+    Vernacinterp.vinterp_add false ("PrintPureConstr", 0)
       (function
          [c] when genarg_tag c = ConstrArgType && true ->
            let c = out_gen (rawwit wit_constr) c in

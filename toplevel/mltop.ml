@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -155,22 +155,11 @@ let add_ml_dir s =
     | WithoutTop when has_dynlink -> keep_copy_mlpath s
     | _ -> ()
 
-(* For Rec Add ML Path *)
+(* For Rec Add ML Path (-R) *)
 let add_rec_ml_dir unix_path =
   List.iter (fun (lp,_) -> add_ml_dir lp) (all_subdirs ~unix_path)
 
 (* Adding files to Coq and ML loadpath *)
-
-let add_path ~unix_path:dir ~coq_root:coq_dirpath ~implicit =
-  if exists_dir dir then
-    begin
-      add_ml_dir dir;
-      Loadpath.add_load_path dir
-        (if implicit then Loadpath.ImplicitRootPath else Loadpath.RootPath)
-        coq_dirpath
-    end
-  else
-    msg_warning (str ("Cannot open " ^ dir))
 
 let convert_string d =
   try Names.Id.of_string d
@@ -191,11 +180,9 @@ let add_rec_path ~unix_path ~coq_root ~implicit =
     let dirs = List.map_filter convert_dirs dirs in
     let () = add_ml_dir unix_path in
     let add (path, dir) =
-      Loadpath.add_load_path path Loadpath.ImplicitPath dir in
-    let () = if implicit then List.iter add dirs in
-    Loadpath.add_load_path unix_path
-      (if implicit then Loadpath.ImplicitRootPath else Loadpath.RootPath)
-      coq_root
+      Loadpath.add_load_path path ~implicit dir in
+    let () = List.iter add dirs in
+    Loadpath.add_load_path unix_path ~implicit coq_root
   else
     msg_warning (str ("Cannot open " ^ unix_path))
 

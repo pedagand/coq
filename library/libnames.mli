@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -36,6 +36,8 @@ val append_dirpath : DirPath.t -> DirPath.t -> DirPath.t
 
 val drop_dirpath_prefix : DirPath.t -> DirPath.t -> DirPath.t
 val is_dirpath_prefix_of : DirPath.t -> DirPath.t -> bool
+
+val is_dirpath_suffix_of : DirPath.t -> DirPath.t -> bool
 
 module Dirset : Set.S with type elt = DirPath.t
 module Dirmap : Map.ExtS with type key = DirPath.t and module Set := Dirset

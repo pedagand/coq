@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -230,7 +230,6 @@ let compute_elim_sorts env_ar params mib arity lc =
   let infos = Array.map (sorts_of_constr_args env_params) lc in
   let (small,unit) = small_unit infos in
   (* We accept recursive unit types... *)
-  let unit = unit && mib.mind_ntypes = 1 in
   (* compute the max of the sorts of the products of the constructor type *)
   let level = max_inductive_sort
     (Array.concat (Array.to_list (Array.map Array.of_list infos))) in

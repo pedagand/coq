@@ -63,12 +63,12 @@ CSDPCERT:=plugins/micromega/csdpcert$(EXE)
 CORESRCDIRS:=\
   config 	lib		kernel		kernel/byterun	library \
   proofs 	tactics 	pretyping	interp		stm \
-  toplevel	parsing	printing	grammar	        intf
+  toplevel	parsing	printing	grammar	        intf	engine
 
 PLUGINS:=\
   omega		romega 		micromega 	quote \
   setoid_ring 	extraction 	fourier \
-  cc 		funind 		firstorder 	Derive \
+  cc 		funind 		firstorder 	derive \
   rtauto 	nsatz           syntax          decl_mode	btauto
 
 SRCDIRS:=\
@@ -78,16 +78,16 @@ SRCDIRS:=\
 
 IDESRCDIRS:= $(CORESRCDIRS) ide ide/utils
 
-# Order is relevent here because kernel and checker contain files
+# Order is relevant here because kernel and checker contain files
 # with the same name
 CHKSRCDIRS:= checker lib config kernel parsing
 
 ###########################################################################
-# tools
+# Tools
 ###########################################################################
 
 COQDEP:=bin/coqdep$(EXE)
-COQDEPBOOT:=bin/coqdep_boot$(EXE)
+OCAMLLIBDEP:=bin/ocamllibdep$(EXE)
 COQMAKEFILE:=bin/coq_makefile$(EXE)
 GALLINA:=bin/gallina$(EXE)
 COQTEX:=bin/coq-tex$(EXE)
@@ -99,7 +99,7 @@ COQWORKMGR:=bin/coqworkmgr$(EXE)
 TOOLS:=$(COQDEP) $(COQMAKEFILE) $(GALLINA) $(COQTEX) $(COQWC) $(COQDOC) $(COQC)\
 	$(COQWORKMGR)
 
-PRIVATEBINARIES:=$(FAKEIDE) $(COQDEPBOOT)
+PRIVATEBINARIES:=$(FAKEIDE) $(OCAMLLIBDEP)
 
 ###########################################################################
 # Documentation
@@ -161,7 +161,7 @@ BYTERUN:=$(addprefix kernel/byterun/, \
 # the libraries directly
 
 CORECMA:=lib/clib.cma lib/lib.cma kernel/kernel.cma library/library.cma \
-        pretyping/pretyping.cma interp/interp.cma proofs/proofs.cma \
+        engine/engine.cma pretyping/pretyping.cma interp/interp.cma proofs/proofs.cma \
         parsing/parsing.cma printing/printing.cma tactics/tactics.cma \
 	stm/stm.cma toplevel/toplevel.cma parsing/highparsing.cma tactics/hightactics.cma
 
@@ -190,7 +190,7 @@ OTHERSYNTAXCMA:=$(addprefix plugins/syntax/, \
 	ascii_syntax_plugin.cma \
         string_syntax_plugin.cma )
 DECLMODECMA:=plugins/decl_mode/decl_mode_plugin.cma
-DERIVECMA:=plugins/Derive/derive_plugin.cma
+DERIVECMA:=plugins/derive/derive_plugin.cma
 
 PLUGINSCMA:=$(OMEGACMA) $(ROMEGACMA) $(MICROMEGACMA) $(DECLMODECMA) \
         $(QUOTECMA) $(RINGCMA) \
@@ -207,11 +207,20 @@ ifneq ($(HASNATDYNLINK),false)
  PLUGINS:=$(PLUGINSCMA)
  PLUGINSOPT:=$(PLUGINSCMA:.cma=.cmxs)
 else
+ifeq ($(BEST),byte)
+ STATICPLUGINS:=
+ INITPLUGINS:=$(EXTRACTIONCMA) $(FOCMA) $(CCCMA) \
+	$(FUNINDCMA) $(NATSYNTAXCMA)
+ INITPLUGINSOPT:=$(INITPLUGINS:.cma=.cmxs)
+ PLUGINS:=$(PLUGINSCMA)
+ PLUGINSOPT:=$(PLUGINSCMA:.cma=.cmxs)
+else
  STATICPLUGINS:=$(PLUGINSCMA)
  INITPLUGINS:=
  INITPLUGINSOPT:=
  PLUGINS:=
  PLUGINSOPT:=
+endif
 endif
 
 LINKCMO:=$(CORECMA) $(STATICPLUGINS)
@@ -246,7 +255,7 @@ CSDPCERTCMO:=$(addprefix plugins/micromega/, \
 
 DEBUGPRINTERS:=dev/top_printers.cmo dev/vm_printers.cmo dev/printers.cma
 
-COQDEPCMO:=$(COQENVCMO) tools/coqdep_lexer.cmo tools/coqdep_common.cmo tools/coqdep.cmo
+COQDEPCMO:=$(COQENVCMO) lib/system.cmo tools/coqdep_lexer.cmo tools/coqdep_common.cmo tools/coqdep.cmo
 
 COQDOCCMO:=lib/clib.cma $(addprefix tools/coqdoc/, \
   cdglobals.cmo alpha.cmo index.cmo tokens.cmo output.cmo cpretty.cmo main.cmo )
@@ -279,6 +288,7 @@ STRINGSVO:=$(call cat_vo_itarget, theories/Strings)
 SETSVO:=$(call cat_vo_itarget, theories/Sets)
 FSETSVO:=$(call cat_vo_itarget, theories/FSets)
 MSETSVO:=$(call cat_vo_itarget, theories/MSets)
+MMAPSVO:=$(call cat_vo_itarget, theories/MMaps)
 RELATIONSVO:=$(call cat_vo_itarget, theories/Relations)
 WELLFOUNDEDVO:=$(call cat_vo_itarget, theories/Wellfounded)
 REALSVO:=$(call cat_vo_itarget, theories/Reals)
@@ -294,7 +304,7 @@ THEORIESVO:=\
   $(RELATIONSVO) $(WELLFOUNDEDVO) $(SETOIDSVO) \
   $(LISTSVO) $(STRINGSVO) \
   $(PARITHVO) $(NARITHVO) $(ZARITHVO) \
-  $(SETSVO) $(FSETSVO) $(MSETSVO) \
+  $(SETSVO) $(FSETSVO) $(MSETSVO) $(MMAPSVO) \
   $(REALSVO)  $(SORTINGVO) $(QARITHVO) \
   $(NUMBERSVO) $(STRUCTURESVO) $(VECTORSVO)
 
@@ -314,7 +324,7 @@ BTAUTOVO:=$(call cat_vo_itarget, plugins/btauto)
 RTAUTOVO:=$(call cat_vo_itarget, plugins/rtauto)
 EXTRACTIONVO:=$(call cat_vo_itarget, plugins/extraction)
 CCVO:=
-DERIVEVO:=$(call cat_vo_itarget, plugins/Derive)
+DERIVEVO:=$(call cat_vo_itarget, plugins/derive)
 
 PLUGINSVO:= $(OMEGAVO) $(ROMEGAVO) $(MICROMEGAVO) \
 	    $(FOURIERVO) $(CCVO) $(FUNINDVO) \
@@ -361,7 +371,7 @@ MANPAGES:=man/coq-tex.1 man/coqdep.1 man/gallina.1 \
 OCAMLDOCDIR=dev/ocamldoc
 
 DOCMLIS=$(wildcard ./lib/*.mli ./intf/*.mli ./kernel/*.mli ./library/*.mli \
-	./pretyping/*.mli ./interp/*.mli printing/*.mli \
+	./engine/*.mli ./pretyping/*.mli ./interp/*.mli printing/*.mli \
 	./parsing/*.mli ./proofs/*.mli \
 	./tactics/*.mli ./stm/*.mli ./toplevel/*.mli)
 

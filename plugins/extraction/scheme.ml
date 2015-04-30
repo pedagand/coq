@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -212,7 +212,7 @@ and pp_module_expr = function
   | MEfunctor _ -> mt ()
       (* for the moment we simply discard unapplied functors *)
   | MEident _ | MEapply _ -> assert false
-      (* should be expansed in extract_env *)
+      (* should be expanded in extract_env *)
 
 let pp_struct =
   let pp_sel (mp,sel) =
@@ -225,6 +225,7 @@ let pp_struct =
 let scheme_descr = {
   keywords = keywords;
   file_suffix = ".scm";
+  file_naming = file_of_modfile;
   preamble = preamble;
   pp_struct = pp_struct;
   sig_suffix = None;

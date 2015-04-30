@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -14,11 +14,6 @@ open Names
   associated a Coq [DirPath.t] (the "logical" path of the physical path).
 
 *)
-
-type path_type =
-  | ImplicitPath     (** Can be implicitly appended to a logical path. *)
-  | ImplicitRootPath (** Can be implicitly appended to the suffix of a logical path. *)
-  | RootPath         (** Can only be a prefix of a logical path. *)
 
 type t
 (** Type of loadpath bindings. *)
@@ -35,8 +30,8 @@ val get_load_paths : unit -> t list
 val get_paths : unit -> CUnix.physical_path list
 (** Same as [get_load_paths] but only get the physical part. *)
 
-val add_load_path : CUnix.physical_path -> path_type -> DirPath.t -> unit
-(** [add_load_path phys type log] adds the binding [phys := log] to the current
+val add_load_path : CUnix.physical_path -> DirPath.t -> implicit:bool -> unit
+(** [add_load_path phys log type] adds the binding [phys := log] to the current
     loadpaths. *)
 
 val remove_load_path : CUnix.physical_path -> unit
@@ -52,7 +47,8 @@ val is_in_load_paths : CUnix.physical_path -> bool
 
 val expand_path : DirPath.t -> (CUnix.physical_path * DirPath.t) list
 (** Given a relative logical path, associate the list of absolute physical and
-    logical paths which are possible expansions of it. *)
+    logical paths which are possible matches of it. *)
 
-val expand_root_path : DirPath.t -> CUnix.physical_path list
-(** As [expand_path] but restricts to root loadpaths. *)
+val filter_path : (DirPath.t -> bool) -> (CUnix.physical_path * DirPath.t) list
+(** As {!expand_path} but uses a filter function instead, and ignores the
+    implicit status of loadpaths. *)

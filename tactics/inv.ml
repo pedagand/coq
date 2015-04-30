@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -478,7 +478,7 @@ let wrap_inv_error id = function (e, info) -> match e with
       Proofview.tclENV >>= fun env ->
       tclZEROMSG (
 	(strbrk "Inversion would require case analysis on sort " ++
-	pr_sort k ++
+	pr_sort Evd.empty k ++
 	strbrk " which is not allowed for inductive definition " ++
 	pr_inductive env (fst i) ++ str "."))
   | e -> Proofview.tclZERO ~info e

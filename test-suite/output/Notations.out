@@ -41,29 +41,29 @@ fun x : nat => ifn x is succ n then n else 0
 -4
      : Z
 The command has indeed failed with message:
-=> Error: x should not be bound in a recursive pattern of the right-hand side.
+Error: x should not be bound in a recursive pattern of the right-hand side.
 The command has indeed failed with message:
-=> Error: in the right-hand side, y and z should appear in
+Error: in the right-hand side, y and z should appear in
 term position as part of a recursive pattern.
 The command has indeed failed with message:
-=> Error: The reference w was not found in the current environment.
+The reference w was not found in the current environment.
 The command has indeed failed with message:
-=> Error: in the right-hand side, y and z should appear in
+Error: in the right-hand side, y and z should appear in
 term position as part of a recursive pattern.
 The command has indeed failed with message:
-=> Error: z is expected to occur in binding position in the right-hand side.
+Error: z is expected to occur in binding position in the right-hand side.
 The command has indeed failed with message:
-=> Error: as y is a non-closed binder, no such "," is allowed to occur.
+Error: as y is a non-closed binder, no such "," is allowed to occur.
 The command has indeed failed with message:
-=> Error: Cannot find where the recursive pattern starts.
+Error: Cannot find where the recursive pattern starts.
 The command has indeed failed with message:
-=> Error: Cannot find where the recursive pattern starts.
+Error: Cannot find where the recursive pattern starts.
 The command has indeed failed with message:
-=> Error: Cannot find where the recursive pattern starts.
+Error: Cannot find where the recursive pattern starts.
 The command has indeed failed with message:
-=> Error: Cannot find where the recursive pattern starts.
+Error: Cannot find where the recursive pattern starts.
 The command has indeed failed with message:
-=> Error: Both ends of the recursive pattern are the same.
+Error: Both ends of the recursive pattern are the same.
 SUM (nat * nat) nat
      : Set
 FST (0; 1)
@@ -111,13 +111,14 @@ fun x : option Z => match x with
                     | NONE2 => 0
                     end
      : option Z -> Z
-fun x : list ?T0 => match x with
+fun x : list ?T1 => match x with
                     | NIL => NONE2
                     | (_ :') t => SOME2 t
                     end
-     : list ?T0 -> option (list ?T0)
+     : list ?T1 -> option (list ?T1)
 where
-?T0 : [x : list ?T0 |- Type] (x cannot be used)
+?T1 : [x : list ?T1  x1 : list ?T1  x0 := x1 : list ?T1 |- Type] (x, x1,
+      x0 cannot be used)
 s
      : s
 10

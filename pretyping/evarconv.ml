@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -324,18 +324,25 @@ let rec evar_conv_x ts env evd pbty term1 term2 =
      Note: incomplete heuristic... *)
   let ground_test =
     if is_ground_term evd term1 && is_ground_term evd term2 then (
-      let evd, b = 
-	try infer_conv ~pb:pbty ~ts:(fst ts) env evd term1 term2 
-	with Univ.UniverseInconsistency _ -> evd, false
+      let evd, e = 
+	try
+	  let evd, b = infer_conv ~catch_incon:false ~pb:pbty ~ts:(fst ts)
+	    env evd term1 term2 
+	  in
+	    if b then evd, None
+	    else evd, Some (ConversionFailed (env,term1,term2))
+	with Univ.UniverseInconsistency e -> evd, Some (UnifUnivInconsistency e)
       in
-	if b then Some (evd, true)
-	else if is_ground_env evd env then Some (evd, false)
-	else None)
+	match e with
+	| None -> Some (evd, e)
+	| Some e -> 
+	  if is_ground_env evd env then Some (evd, Some e)
+	  else None)
     else None
   in
   match ground_test with
-    | Some (evd, true) -> Success evd
-    | Some (evd, false) -> UnifFailure (evd,ConversionFailed (env,term1,term2))
+    | Some (evd, None) -> Success evd
+    | Some (evd, Some e) -> UnifFailure (evd,e)
     | None ->
 	(* Until pattern-unification is used consistently, use nohdbeta to not
 	   destroy beta-redexes that can be used for 1st-order unification *)
@@ -555,8 +562,7 @@ and evar_eqappr_x ?(rhs_is_already_stuck = false) ts env evd pbty
         | LetIn (na,b1,t1,c'1), LetIn (_,b2,t2,c'2) ->
         let f1 i =
           ise_and i
-	    [(fun i -> evar_conv_x ts env i CONV t1 t2);
-	     (fun i -> evar_conv_x ts env i CONV b1 b2);
+	    [(fun i -> evar_conv_x ts env i CONV b1 b2);
 	     (fun i ->
 	       let b = nf_evar i b1 in
 	       let t = nf_evar i t1 in
@@ -937,7 +943,7 @@ let filter_possible_projections c ty ctxt args =
   List.map_i (fun i (id,b,_) ->
     let () = assert (i < len) in
     let a = Array.unsafe_get args i in
-    not (Option.is_empty b) ||
+    (match b with None -> false | Some c -> not (isRel c || isVar c)) ||
     a == c ||
     (* Here we make an approximation, for instance, we could also be *)
     (* interested in finding a term u convertible to c such that a occurs *)
@@ -975,7 +981,6 @@ let second_order_matching ts env_rhs evd (evk,args) argoccs rhs =
   let env_evar = evar_filtered_env evi in
   let sign = named_context_val env_evar in
   let ctxt = evar_filtered_context evi in
-  let filter = evar_filter evi in
   let instance = List.map mkVar (List.map pi1 ctxt) in
 
   let rec make_subst = function
@@ -990,8 +995,7 @@ let second_order_matching ts env_rhs evd (evk,args) argoccs rhs =
       let evs = ref [] in
       let ty = Retyping.get_type_of env_rhs evd c in
       let filter' = filter_possible_projections c ty ctxt args in
-      let filter = Filter.map_along (&&) filter filter' in
-      (id,t,c,ty,evs,filter,occs) :: make_subst (ctxt',l,occsl)
+      (id,t,c,ty,evs,Filter.make filter',occs) :: make_subst (ctxt',l,occsl)
   | _, _, [] -> []
   | _ -> anomaly (Pp.str "Signature or instance are shorter than the occurrences list") in
 
@@ -1062,11 +1066,15 @@ let second_order_matching ts env_rhs evd (evk,args) argoccs rhs =
   with TypingFailed evd -> evd, false
 
 let second_order_matching_with_args ts env evd ev l t =
-  let evd,ev = evar_absorb_arguments env evd ev (Array.to_list l) in
+(*
+  let evd,ev = evar_absorb_arguments env evd ev l in
   let argoccs = Array.map_to_list (fun _ -> None) (snd ev) in
   let evd, b = second_order_matching ts env evd ev argoccs t in
   if b then Success evd
   else UnifFailure (evd, ConversionFailed (env,mkApp(mkEvar ev,l),t))
+  if b then Success evd else
+*)
+  UnifFailure (evd, ConversionFailed (env,mkApp(mkEvar ev,l),t))
 
 let apply_conversion_problem_heuristic ts env evd pbty t1 t2 =
   let t1 = apprec_nohdbeta ts env evd (whd_head_evar evd t1) in

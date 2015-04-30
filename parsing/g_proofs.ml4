@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -52,15 +52,17 @@ GEXTEND Gram
       | IDENT "Existential"; n = natural; c = constr_body ->
 	  VernacSolveExistential (n,c)
       | IDENT "Admitted" -> VernacEndProof Admitted
-      | IDENT "Qed" -> VernacEndProof (Proved (true,None))
-      | IDENT "Save" -> VernacEndProof (Proved (true,None))
+      | IDENT "Qed" -> VernacEndProof (Proved (Opaque None,None))
+      | IDENT "Qed"; IDENT "exporting"; l = LIST0 identref SEP "," ->
+          VernacEndProof (Proved (Opaque (Some l),None))
+      | IDENT "Save" -> VernacEndProof (Proved (Opaque None,None))
       | IDENT "Save"; tok = thm_token; id = identref ->
-	  VernacEndProof (Proved (true,Some (id,Some tok)))
+	  VernacEndProof (Proved (Opaque None,Some (id,Some tok)))
       | IDENT "Save"; id = identref ->
-	  VernacEndProof (Proved (true,Some (id,None)))
-      | IDENT "Defined" -> VernacEndProof (Proved (false,None))
+	  VernacEndProof (Proved (Opaque None,Some (id,None)))
+      | IDENT "Defined" -> VernacEndProof (Proved (Transparent,None))
       |	IDENT "Defined"; id=identref ->
-	  VernacEndProof (Proved (false,Some (id,None)))
+	  VernacEndProof (Proved (Transparent,Some (id,None)))
       | IDENT "Restart" -> VernacRestart
       | IDENT "Undo" -> VernacUndo 1
       | IDENT "Undo"; n = natural -> VernacUndo n

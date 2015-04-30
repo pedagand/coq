@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -233,9 +233,9 @@ let declare_assumption is_coe (local,p,kind) (c,ctx) imps impl nl (_,ident) = ma
   in
     (gr,inst,Lib.is_modtype_strict ())
 
-let interp_assumption evdref env bl c =
+let interp_assumption evdref env impls bl c =
   let c = prod_constr_expr c bl in
-  let ty, impls = interp_type_evars_impls env evdref c in
+  let ty, impls = interp_type_evars_impls env evdref ~impls c in
   let evd, nf = nf_evars_and_universes !evdref in
   let ctx = Evd.universe_context_set evd in
     ((nf ty, ctx), impls)
@@ -259,12 +259,15 @@ let do_assumptions (_, poly, _ as kind) nl l =
         l []
     else l
   in
-  let _,l = List.fold_map (fun env (is_coe,(idl,c)) ->
-    let (t,ctx),imps = interp_assumption evdref env [] c in
+  let _,l = List.fold_map (fun (env,ienv) (is_coe,(idl,c)) ->
+    let (t,ctx),imps = interp_assumption evdref env ienv [] c in
     let env =
       push_named_context (List.map (fun (_,id) -> (id,None,t)) idl) env in
-      (env,((is_coe,idl),t,(ctx,imps)))) 
-    env l 
+    let ienv = List.fold_right (fun (_,id) ienv ->
+      let impls = compute_internalization_data env Variable t imps in
+      Id.Map.add id impls ienv) idl ienv in
+      ((env,ienv),((is_coe,idl),t,(ctx,imps)))) 
+    (env,empty_internalization_env) l
   in
   let evd = solve_remaining_evars all_and_fail_flags env !evdref (Evd.empty,!evdref) in
   let l = List.map (on_pi2 (nf_evar evd)) l in
@@ -746,8 +749,8 @@ let interp_fix_body env_rec evdref impls (_,ctx) fix ccl =
 
 let build_fix_type (_,ctx) ccl = it_mkProd_or_LetIn ccl ctx
 
-let declare_fix (_,poly,_ as kind) ctx f ((def,_),eff) t imps =
-  let ce = definition_entry ~types:t ~poly ~univs:ctx ~eff def in
+let declare_fix ?(opaque = false) (_,poly,_ as kind) ctx f ((def,_),eff) t imps =
+  let ce = definition_entry ~opaque ~types:t ~poly ~univs:ctx ~eff def in
   declare_definition f kind ce imps (Lemmas.mk_hook (fun _ r -> r))
 
 let _ = Obligations.declare_fix_ref := declare_fix

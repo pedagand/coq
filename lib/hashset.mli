@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -19,6 +19,13 @@ module type EqType = sig
   val equal : t -> t -> bool
 end
 
+type statistics = {
+  num_bindings: int;
+  num_buckets: int;
+  max_bucket_length: int;
+  bucket_histogram: int array
+}
+
 module type S = sig
   type elt
   (** Type of hashsets elements. *)
@@ -34,6 +41,8 @@ module type S = sig
       specific representation that is stored in [set]. Otherwise,
       [constr] is stored in [set] and will be used as the canonical
       representation of this value in the future. *)
+  val stats : t -> statistics
+  (** Recover statistics on the table. *)
 end
 
 module Make (E : EqType) : S with type elt = E.t

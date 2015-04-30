@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -125,8 +125,9 @@ val exact_proof      : Constrexpr.constr_expr -> tactic
 
 type tactic_reduction = env -> evar_map -> constr -> constr
 
-type change_arg = evar_map -> evar_map * constr
+type change_arg = patvar_map -> evar_map -> evar_map * constr
 
+val make_change_arg   : constr -> change_arg
 val reduct_in_hyp     : ?check:bool -> tactic_reduction -> hyp_location -> tactic
 val reduct_option     : ?check:bool -> tactic_reduction * cast_kind -> goal_location -> tactic
 val reduct_in_concl   : tactic_reduction * cast_kind -> tactic
@@ -392,8 +393,6 @@ val generalize_dep  : ?with_let:bool (** Don't lose let bindings *) -> constr  -
 val unify           : ?state:Names.transparent_state -> constr -> constr -> unit Proofview.tactic
 
 val tclABSTRACT : Id.t option -> unit Proofview.tactic -> unit Proofview.tactic
-
-val admit_as_an_axiom : unit Proofview.tactic
 
 val abstract_generalize : ?generalize_vars:bool -> ?force_dep:bool -> Id.t -> unit Proofview.tactic
 val specialize_eqs : Id.t -> tactic

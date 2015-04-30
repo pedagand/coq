@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -234,7 +234,7 @@ let reduction_of_red_expr env =
 	 with Not_found ->
 	   error("unknown user-defined reduction \""^s^"\"")))
   | CbvVm o -> (contextualize cbv_vm cbv_vm o, VMcast)
-  | CbvNative o -> (contextualize cbv_native cbv_native o, VMcast)
+  | CbvNative o -> (contextualize cbv_native cbv_native o, NATIVEcast)
   in
     reduction_of_red_expr
 

@@ -167,7 +167,7 @@ defined with the {\tt Record} keyword can be activated with the
 (see~\ref{set-nonrecursive-elimination-schemes}).
 
 \begin{Warnings}
-\item {\tt Warning: {\ident$_i$} cannot be defined.}
+\item {\tt {\ident$_i$} cannot be defined.}
 
   It can happen that the definition of a projection is impossible.
   This message is followed by an explanation of this impossibility.
@@ -281,6 +281,37 @@ the inductive type.
 
 To deactivate the printing of projections, use 
 {\tt Unset Printing Projections}.
+
+\subsection{Primitive Projections}
+\index{Primitive projections}
+\label{prim-proj}
+
+The option {\tt Set Primitive Projections} turns on the use of primitive
+projections when defining subsequent records. Primitive projections
+extended the calculus of inductive constructions with a new binary term
+constructor {\tt r.(p)} representing a primitive projection p applied to
+a record object {\tt r} (i.e., primitive projections are always
+applied). Even if the record type has parameters, these do not appear at
+applications of the projection, considerably reducing the sizes of terms
+when manipulating parameterized records and typechecking time. On the
+user level, primitive projections are a transparent replacement
+for the usual defined ones.
+
+  % - r.(p) and (p r) elaborate to native projection application, and
+  %   the parameters cannot be mentioned. The following arguments are
+  %   parsed according to the remaining implicit arguments declared for the
+  %   projection (i.e. the implicit arguments after the record type
+  %   argument). In dot notation, the record type argument is considered
+  %   explicit no matter what its implicit status is.
+  % - r.(@p params) and @p args are parsed as regular applications of the
+  %   projection with explicit parameters.
+  % - [simpl p] is forbidden, but [simpl @p] will simplify both the projection
+  %   and its explicit [@p] version.
+  % - [unfold p] has no effect on projection applications unless it is applied
+  %   to a constructor. If the explicit version appears it reduces to the
+  %   projection application.
+  % - [pattern x at n], [rewrite x at n] and in general abstraction and selection
+  %   of occurrences may fail due to the disappearance of parameters.
 
 
 \section{Variants and extensions of {\mbox{\tt match}}
@@ -403,7 +434,7 @@ we have an equivalence between
 {\tt match {\term} \zeroone{\ifitem} with C {\ident}$_1$ {\ldots} {\ident}$_n$ \verb!=>! {\term}' end}
 
 
-\subsubsection{Second destructuring {\tt let} syntax\index{let '... in}}
+\subsubsection{Second destructuring {\tt let} syntax\index{let '... in@\texttt{let '... in}}}
 
 Another destructuring {\tt let} syntax is available for inductive types with
 one constructor by giving an arbitrary pattern instead of just a tuple
@@ -439,9 +470,7 @@ The following commands give some control over the pretty-printing of
 
 \subsubsection{Printing nested patterns
 \label{SetPrintingMatching}
-\comindex{Set Printing Matching}
-\comindex{Unset Printing Matching}
-\comindex{Test Printing Matching}}
+\optindex{Printing Matching}}
 
 The Calculus of Inductive Constructions knows pattern-matching only
 over simple patterns. It is however convenient to re-factorize nested
@@ -467,9 +496,7 @@ This tells if the printing matching mode is on or off. The default is
 on.
 
 \subsubsection{Printing of wildcard pattern
-\comindex{Set Printing Wildcard}
-\comindex{Unset Printing Wildcard}
-\comindex{Test Printing Wildcard}}
+\optindex{Printing Wildcard}}
 
 Some variables in a pattern may not occur in the right-hand side of
 the pattern-matching clause.  There are options to control the
@@ -496,9 +523,7 @@ This tells if the wildcard printing mode is on or off. The default is
 to print wildcard for useless variables.
 
 \subsubsection{Printing of the elimination predicate
-\comindex{Set Printing Synth}
-\comindex{Unset Printing Synth}
-\comindex{Test Printing Synth}}
+\optindex{Printing Synth}}
 
 In most of the cases, the type of the result of a matched term is
 mechanically synthesizable. Especially, if the result type does not
@@ -529,8 +554,7 @@ The default is to not print synthesizable types.
 \comindex{Print Table Printing Let}}
 
 If an inductive type has just one constructor,
-pattern-matching can be written using {\tt let} ... {\tt :=}
-... {\tt in}~...
+pattern-matching can be written using the first destructuring let syntax.
 
 \begin{quote}
 {\tt Add Printing Let {\ident}.}
@@ -541,7 +565,10 @@ pattern-matching is written using a {\tt let} expression.
 \begin{quote}
 {\tt Remove Printing Let {\ident}.}
 \end{quote}
-This removes {\ident} from this list.
+This removes {\ident} from this list. Note that removing an inductive
+type from this list has an impact only for pattern-matching written using
+\texttt{match}. Pattern-matching explicitly written using a destructuring
+let are not impacted.
 
 \begin{quote}
 {\tt Test Printing Let for {\ident}.}
@@ -599,13 +626,19 @@ it is sensible to the command {\tt Reset}.
 This example emphasizes what the printing options offer.
 
 \begin{coq_example}
+Definition snd (A B:Set) (H:A * B) := match H with
+                                      | pair x y => y
+                                      end.
 Test Printing Let for prod.
-Print fst.
+Print snd.
 Remove Printing Let prod.
 Unset Printing Synth.
 Unset Printing Wildcard.
-Print fst.
+Print snd.
 \end{coq_example}
+\begin{coq_eval}
+Reset Initial.
+\end{coq_eval}
 
 % \subsection{Still not dead old notations}
 
@@ -1020,50 +1053,59 @@ Please note that the questions described here have been subject to
 redesign in Coq v8.5. Former versions of Coq use the same terminology
 to describe slightly different things.
 
-Compiled files (\texttt{.vo} and \texttt{.vi}) store sub-libraries. In
+Compiled files (\texttt{.vo} and \texttt{.vio}) store sub-libraries. In
 order to refer to them inside {\Coq}, a translation from file-system
 names to {\Coq} names is needed. In this translation, names in the
 file system are called {\em physical} paths while {\Coq} names are
 contrastingly called {\em logical} names.
 
-A logical name {\tt Lib} can associated to a physical path
+A logical prefix {\tt Lib} can be associated to a physical path
 \textrm{\textsl{path}} using the command line option {\tt -Q}
-\textrm{\textsl{path}} {\tt Lib}. This associates a logical name to
-all the compiled files in the directory tree rooted at
-\textrm{\textsl{path}}. The name associated to the file {\tt
-  path/fOO/Bar/File.vo} is {\tt Lib.fOO.Bar.File}. Subdirectories
+\textrm{\textsl{path}} {\tt Lib}. All subfolders of {\textsl{path}} are
+recursively associated to the logical path {\tt Lib} extended with the
+corresponding suffix coming from the physical path. For instance, the
+folder {\tt path/fOO/Bar} maps to {\tt Lib.fOO.Bar}. Subdirectories
 corresponding to invalid {\Coq} identifiers are skipped, and, by
 convention, subdirectories named {\tt CVS} or {\tt \_darcs} are
 skipped too.
 
-{\Coq} commands also associate automatically a logical path to files
+Thanks to this mechanism, {\texttt{.vo}} files are made available through the
+logical name of the folder they are in, extended with their own basename. For
+example, the name associated to the file {\tt path/fOO/Bar/File.vo} is
+{\tt Lib.fOO.Bar.File}. The same caveat applies for invalid identifiers.
+When compiling a source file, the {\texttt{.vo}} file stores its logical name,
+so that an error is issued if it is loaded with the wrong loadpath afterwards.
+
+Some folders have a special status and are automatically put in the path.
+{\Coq} commands associate automatically a logical path to files
 in the repository trees rooted at the directory from where the command
 is launched, \textit{coqlib}\texttt{/user-contrib/}, the directories
 listed in the \verb:$COQPATH:, \verb:${XDG_DATA_HOME}/coq/: and
 \verb:${XDG_DATA_DIRS}/coq/: environment variables (see
 \url{http://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html})
-with the same $/ \to .$ convention but no prefix.
+with the same physical-to-logical translation and with an empty logical prefix.
 
-The command line option \texttt{-R} is a variant of \texttt{-Q} that
-associates to a physical path the same logical path as \texttt{-Q}, as
-well as all suffixes of that logical path. The option \texttt{-R}
-\textrm{\textsl{path}} \texttt{Lib} associates to
-\texttt{path/fOO/Bar/File.vo} the logical names
-\texttt{Lib.fOO.Bar.File}, \texttt{fOO.Bar.File}, \texttt{Bar.File}
-and \texttt{File}. If several files with identical base name are
-present in different subdirectories of a recursive loadpath, which of
+The command line option \texttt{-R} is a variant of \texttt{-Q} which has the
+strictly same behavior regarding loadpaths, but which also makes the
+corresponding \texttt{.vo} files available through their short names in a
+way not unlike the {\tt Import} command (see~{\ref{Import}}). For instance,
+\texttt{-R} \textrm{\textsl{path}} \texttt{Lib} associates to the file
+\texttt{path/fOO/Bar/File.vo} the logical name \texttt{Lib.fOO.Bar.File}, but
+allows this file to be accessed through the short names \texttt{fOO.Bar.File},
+\texttt{Bar.File} and \texttt{File}. If several files with identical base name
+are present in different subdirectories of a recursive loadpath, which of
 these files is found first may be system-dependent and explicit
-qualification is recommended.
+qualification is recommended. The {\tt From} argument of the {\tt Require}
+command can be used to bypass the implicit shortening by providing an absolute
+root to the required file (see~\ref{Require}).
 
-There are currently two loadpaths in {\Coq}. There is one loadpath
-where seeking {\Coq} files (extensions \texttt{.v} or \texttt{.vo} or
-\texttt{.vi}) whose management has been explained just above, and one
-where seeking {\ocaml} files. The {\ocaml} loadpath is
-managed using the option \texttt{-I path}. As in {\ocaml} world, there
-is nether a notion of logical name prefix nor a way to access files in
-subdirectories of \texttt{path}. See the command \texttt{Declare ML
-  Module} in Section~\ref{compiled} to understand the need of the
-{\ocaml} loadpath.
+There also exists another independent loadpath mechanism attached to {\ocaml}
+object files (\texttt{.cmo} or \texttt{.cmxs}) rather than {\Coq} object files
+as described above. The {\ocaml} loadpath is managed using the option
+\texttt{-I path} (in the {\ocaml} world, there is neither a notion of logical
+name prefix nor a way to access files in subdirectories of \texttt{path}).
+See the command \texttt{Declare ML Module} in Section~\ref{compiled} to
+understand the need of the {\ocaml} loadpath.
 
 See Section~\ref{coqoptions} for a more general view over the {\Coq}
 command line options.
@@ -1412,8 +1454,7 @@ Check (p r1 r2).
 
 \subsection{Mode for automatic declaration of implicit arguments
 \label{Auto-implicit}
-\comindex{Set Implicit Arguments}
-\comindex{Unset Implicit Arguments}}
+\optindex{Implicit Arguments}}
 
 In case one wants to systematically declare implicit the arguments
 detectable as such, one may switch to the automatic declaration of
@@ -1427,8 +1468,7 @@ arguments is governed by options controlling whether strict and
 contextual implicit arguments have to be considered or not.
 
 \subsection{Controlling strict implicit arguments
-\comindex{Set Strict Implicit}
-\comindex{Unset Strict Implicit}
+\optindex{Strict Implicit}
 \label{SetStrictImplicit}}
 
 When the mode for automatic declaration of implicit arguments is on,
@@ -1443,8 +1483,7 @@ Conversely, use the command {\tt Set Strict Implicit} to
 restore the original mode that declares implicit only the strict implicit arguments plus a small subset of the non strict implicit arguments.
 
 In the other way round, to capture exactly the strict implicit arguments and no more than the strict implicit arguments, use the command:
-\comindex{Set Strongly Strict Implicit}
-\comindex{Unset Strongly Strict Implicit}
+\optindex{Strongly Strict Implicit}
 \begin{quote}
 \tt Set Strongly Strict Implicit.
 \end{quote}
@@ -1455,8 +1494,7 @@ let the option ``{\tt Strict Implicit}'' decide what to do.
 declare the strict implicit arguments as implicit.
 
 \subsection{Controlling contextual implicit arguments
-\comindex{Set Contextual Implicit}
-\comindex{Unset Contextual Implicit}
+\optindex{Contextual Implicit}
 \label{SetContextualImplicit}}
 
 By default, {\Coq} does not automatically set implicit the contextual
@@ -1469,8 +1507,7 @@ Conversely, use command {\tt Unset Contextual Implicit} to
 unset the contextual implicit mode.
 
 \subsection{Controlling reversible-pattern implicit arguments
-\comindex{Set Reversible Pattern Implicit}
-\comindex{Unset Reversible Pattern Implicit}
+\optindex{Reversible Pattern Implicit}
 \label{SetReversiblePatternImplicit}}
 
 By default, {\Coq} does not automatically set implicit the reversible-pattern
@@ -1483,8 +1520,7 @@ Conversely, use command {\tt Unset Reversible Pattern Implicit} to
 unset the reversible-pattern implicit mode.
 
 \subsection{Controlling the insertion of implicit arguments not followed by explicit arguments
-\comindex{Set Maximal Implicit Insertion}
-\comindex{Unset Maximal Implicit Insertion}
+\optindex{Maximal Implicit Insertion}
 \label{SetMaximalImplicitInsertion}}
 
 Implicit arguments can be declared to be automatically inserted when a
@@ -1568,10 +1604,8 @@ if each of them is to be used maximally or not, use the command
 \end{quote}
 
 \subsection{Explicit displaying of implicit arguments for pretty-printing
-\comindex{Set Printing Implicit}
-\comindex{Unset Printing Implicit}
-\comindex{Set Printing Implicit Defensive}
-\comindex{Unset Printing Implicit Defensive}}
+\optindex{Printing Implicit}
+\optindex{Printing Implicit Defensive}}
 
 By default the basic pretty-printing rules hide the inferable implicit
 arguments of an application. To force printing all implicit arguments,
@@ -1614,8 +1648,7 @@ Check Prop = nat.
 \end{coq_example*}
 
 \subsection{Deactivation of implicit arguments for parsing}
-\comindex{Set Parsing Explicit}
-\comindex{Unset Parsing Explicit}
+\optindex{Parsing Explicit}
 
 Use of implicit arguments can be deactivated by issuing the command:
 \begin{quote}
@@ -1751,14 +1784,14 @@ This is useful for declaring the implicit type of a single variable.
 Implicit generalization is an automatic elaboration of a statement with
 free variables into a closed statement where these variables are
 quantified explicitly. Implicit generalization is done inside binders
-starting with a \verb|`| and terms delimited by \verb|`{ }| and
-\verb|`( )|, always introducing maximally inserted implicit arguments for
+starting with a \texttt{\`{}} and terms delimited by \texttt{\`{}\{ \}} and
+\texttt{\`{}( )}, always introducing maximally inserted implicit arguments for
 the generalized variables. Inside implicit generalization
 delimiters, free variables in the current context are automatically
 quantified using a product or a lambda abstraction to generate a closed
 term. In the following statement for example, the variables \texttt{n}
 and \texttt{m} are automatically generalized and become explicit
-arguments of the lemma as we are using \verb|`( )|:
+arguments of the lemma as we are using \texttt{\`{}( )}:
 
 \begin{coq_example}
 Generalizable All Variables.
@@ -1803,7 +1836,7 @@ Definition id `(x : A) : A := x.
 Print id.
 \end{coq_example}
 
-The generalizing binders \verb|`{ }| and \verb|`( )| work similarly to
+The generalizing binders \texttt{\`{}\{ \}} and \texttt{\`{}( )} work similarly to
 their explicit counterparts, only binding the generalized variables
 implicitly, as maximally-inserted arguments. In these binders, the
 binding name for the bound object is optional, whereas the type is
@@ -1835,8 +1868,7 @@ More details and examples, and a description of the commands related
 to coercions are provided in Chapter~\ref{Coercions-full}.
 
 \section[Printing constructions in full]{Printing constructions in full\label{SetPrintingAll}
-\comindex{Set Printing All}
-\comindex{Unset Printing All}}
+\optindex{Printing All}}
 
 Coercions, implicit arguments, the type of pattern-matching, but also
 notations (see Chapter~\ref{Addoc-syntax}) can obfuscate the behavior
@@ -1858,8 +1890,7 @@ printing features, use the command
 \end{quote}
 
 \section[Printing universes]{Printing universes\label{PrintingUniverses}
-\comindex{Set Printing Universes}
-\comindex{Unset Printing Universes}}
+\optindex{Printing Universes}}
 
 The following command:
 \begin{quote}
@@ -1898,47 +1929,77 @@ tools. The format is unspecified if {\str} doesn't end in
 \texttt{.dot} or \texttt{.gv}.
 
 \section[Existential variables]{Existential variables\label{ExistentialVariables}}
+\label{evars}
 
-Coq terms can include existential variables. An existential variable
-is a placeholder intended to eventually be replaced by an actual
-subterm though which subterm it will be replaced by is still unknown.
+Coq terms can include existential variables which
+represents unknown subterms to eventually be replaced by actual
+subterms.
 
 Existential variables are generated in place of unsolvable implicit
-arguments when using commands such as \texttt{Check} (see
-Section~\ref{Check}) or in place of unsolvable instances when using
-tactics such as \texttt{eapply} (see Section~\ref{eapply}). They can
-only appear as the result of a command displaying a term and they are
-represented by ``?'' followed by a number. They cannot be entered by
-the user (though they can be generated from ``\_'' when the
-corresponding implicit argument is unsolvable).
+arguments or ``{\tt \_}'' placeholders when using commands such as
+\texttt{Check} (see Section~\ref{Check}) or when using tactics such as
+\texttt{refine}~(see Section~\ref{refine}), as well as in place of unsolvable
+instances when using tactics such that \texttt{eapply} (see
+Section~\ref{eapply}). An existential variable is defined in a
+context, which is the context of variables of the placeholder which
+generated the existential variable, and a type, which is the expected
+type of the placeholder. 
 
-A given existential variable name can occur several times in a term
-meaning the corresponding expected instance is shared. Each
-existential variable is relative to a context, as shown by {\tt Show
-  Existential} when in the process of proving a goal (see
-Section~\ref{ShowExistentials}). Henceforth, each occurrence of an
-existential variable in a term is subject to an instance of the
-variables of its context of definition which is specific to this
-occurrence.
+As a consequence of typing constraints, existential variables can be
+duplicated in such a way that they possibly appear in different
+contexts than their defining context. Thus, any occurrence of a given
+existential variable comes with an instance of its original context. In the
+simple case, when an existential variable denotes the placeholder
+which generated it, or is used in the same context as the one in which
+it was generated, the context is not displayed and the existential
+variable is represented by ``?'' followed by an identifier.
+
+\begin{coq_example}
+Parameter identity : forall (X:Set), X -> X.
+Check identity _ _.
+Check identity _ (fun x => _).
+\end{coq_example}
+
+In the general case, when an existential variable ?{\ident}
+appears outside of its context of definition, its instance, written under
+the form \verb!@{id1:=term1; ...; idn:=termn}!, is appending to its
+name, indicating how the variables of its defining context are
+instantiated.  The variables of the context of the existential
+variables which are instantiated by themselves are not written, unless
+the flag {\tt Printing Existential Instances} is on (see
+Section~\ref{SetPrintingExistentialInstances}), and this is why an
+existential variable used in the same context as its context of
+definition is written with no instance.
+
+\begin{coq_example}
+Check (fun x y => _) 0 1.
+Set Printing Existential Instances.
+Check (fun x y => _) 0 1.
+\end{coq_example}
+
+\begin{coq_eval}
+Unset Printing Existential Instances.
+\end{coq_eval}
 
 \subsection{Explicit displaying of existential instances for pretty-printing
-\comindex{Set Printing Existential Instances}
-\comindex{Unset Printing Existential Instances}}
+\label{SetPrintingExistentialInstances}
+\optindex{Printing Existential Instances}}
 
 The command:
 \begin{quote}
 {\tt Set Printing Existential Instances}
 \end{quote}
-activates the display of how the context of an existential variable is
-instantiated on each of its occurrences.
+activates the full display of how the context of an existential variable is
+instantiated at each of the occurrences of the existential variable.
 
-To deactivate the display of the instances of existential variables, use
+To deactivate the full display of the instances of existential
+variables, use
 \begin{quote}
 {\tt Unset Printing Existential Instances.}
 \end{quote}
 
 \subsection{Solving existential variables using tactics}
-\index{\tt \textdollar( \ldots )\textdollar}
+\ttindex{\textdollar( \ldots )\textdollar}
 
 \def\expr{\textrm{\textsl{tacexpr}}}
 

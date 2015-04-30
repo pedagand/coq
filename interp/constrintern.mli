@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -174,6 +174,7 @@ val interp_context_evars :
 (** Locating references of constructions, possibly via a syntactic definition 
    (these functions do not modify the glob file) *)
 
+val locate_reference :  Libnames.qualid -> Globnames.global_reference
 val is_global : Id.t -> bool
 val construct_reference : named_context -> Id.t -> constr
 val global_reference : Id.t -> constr

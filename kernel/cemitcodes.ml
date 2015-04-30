@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -10,7 +10,6 @@
    machine, Oct 2004 *)
 (* Extension: Arnaud Spiwack (support for native arithmetic), May 2005 *)
 
-open Names
 open Term
 open Cbytecodes
 open Copcodes
@@ -20,37 +19,25 @@ open Mod_subst
 type reloc_info =
   | Reloc_annot of annot_switch
   | Reloc_const of structured_constant
-  | Reloc_getglobal of constant
+  | Reloc_getglobal of pconstant
 
 type patch = reloc_info * int
 
+let patch_char4 buff pos c1 c2 c3 c4 = 
+  String.unsafe_set buff pos       c1;
+  String.unsafe_set buff (pos + 1) c2;
+  String.unsafe_set buff (pos + 2) c3;
+  String.unsafe_set buff (pos + 3) c4 
+  
 let patch_int buff pos n =
-  String.unsafe_set buff pos (Char.unsafe_chr n);
-  String.unsafe_set buff (pos + 1) (Char.unsafe_chr (n asr 8));
-  String.unsafe_set buff (pos + 2) (Char.unsafe_chr (n asr 16));
-  String.unsafe_set buff (pos + 3) (Char.unsafe_chr (n asr 24))
-
+  patch_char4 buff pos 
+    (Char.unsafe_chr n) (Char.unsafe_chr (n asr 8))  (Char.unsafe_chr (n asr 16))
+    (Char.unsafe_chr (n asr 24))
 
 (* Buffering of bytecode *)
 
 let out_buffer = ref(String.create 1024)
 and out_position = ref 0
-
-(*
-let out_word b1 b2 b3 b4 =
-  let p = !out_position in
-  if p >= String.length !out_buffer then begin
-    let len = String.length !out_buffer in
-    let new_buffer = String.create (2 * len) in
-    String.blit !out_buffer 0 new_buffer 0 len;
-    out_buffer := new_buffer
-  end;
-  String.unsafe_set !out_buffer p (Char.unsafe_chr b1);
-  String.unsafe_set !out_buffer (p+1) (Char.unsafe_chr b2);
-  String.unsafe_set !out_buffer (p+2) (Char.unsafe_chr b3);
-  String.unsafe_set !out_buffer (p+3) (Char.unsafe_chr b4);
-  out_position := p + 4
-*)
 
 let out_word b1 b2 b3 b4 =
   let p = !out_position in
@@ -67,12 +54,9 @@ let out_word b1 b2 b3 b4 =
     String.blit !out_buffer 0 new_buffer 0 len;
     out_buffer := new_buffer
   end;
-  String.unsafe_set !out_buffer p (Char.unsafe_chr b1);
-  String.unsafe_set !out_buffer (p+1) (Char.unsafe_chr b2);
-  String.unsafe_set !out_buffer (p+2) (Char.unsafe_chr b3);
-  String.unsafe_set !out_buffer (p+3) (Char.unsafe_chr b4);
+  patch_char4 !out_buffer p (Char.unsafe_chr b1)
+   (Char.unsafe_chr b2) (Char.unsafe_chr b3) (Char.unsafe_chr b4);
   out_position := p + 4
-
 
 let out opcode =
   out_word opcode 0 0 0
@@ -102,7 +86,7 @@ let extend_label_table needed =
 
 let backpatch (pos, orig) =
   let displ = (!out_position - orig) asr 2 in
-  !out_buffer.[pos] <- Char.unsafe_chr displ;
+  !out_buffer.[pos]   <- Char.unsafe_chr displ;
   !out_buffer.[pos+1] <- Char.unsafe_chr (displ asr 8);
   !out_buffer.[pos+2] <- Char.unsafe_chr (displ asr 16);
   !out_buffer.[pos+3] <- Char.unsafe_chr (displ asr 24)
@@ -147,8 +131,8 @@ and slot_for_annot a =
   enter (Reloc_annot a);
   out_int 0
 
-and slot_for_getglobal id =
-  enter (Reloc_getglobal id);
+and slot_for_getglobal p =
+  enter (Reloc_getglobal p);
   out_int 0
 
 
@@ -223,8 +207,12 @@ let emit_instr = function
       out_label typlbl; out_label swlbl;
       slot_for_annot annot;out_int sz
   | Kswitch (tbl_const, tbl_block) ->
+      let lenb = Array.length tbl_block in
+      let lenc = Array.length tbl_const in
+      assert (lenb < 0x100 && lenc < 0x1000000);
       out opSWITCH;
-      out_int (Array.length tbl_const + (Array.length tbl_block lsl 16));
+      out_word lenc (lenc asr 8) (lenc asr 16) (lenb);
+(*      out_int (Array.length tbl_const + (Array.length tbl_block lsl 23)); *)
       let org = !out_position in
       Array.iter (out_label_with_orig org) tbl_const;
       Array.iter (out_label_with_orig org) tbl_block
@@ -320,7 +308,7 @@ let rec subst_strcst s sc =
   match sc with
   | Const_sorts _ | Const_b0 _ -> sc
   | Const_bn(tag,args) -> Const_bn(tag,Array.map (subst_strcst s) args)
-  | Const_ind(ind) -> let kn,i = ind in Const_ind((subst_mind s kn, i))
+  | Const_ind(ind,u) -> let kn,i = ind in Const_ind((subst_mind s kn, i), u)
 
 let subst_patch s (ri,pos) =
   match ri with
@@ -329,30 +317,46 @@ let subst_patch s (ri,pos) =
       let ci = {a.ci with ci_ind = (subst_mind s kn,i)} in
       (Reloc_annot {a with ci = ci},pos)
   | Reloc_const sc -> (Reloc_const (subst_strcst s sc), pos)
-  | Reloc_getglobal kn -> (Reloc_getglobal (fst (subst_con_kn s kn)), pos)
+  | Reloc_getglobal kn -> (Reloc_getglobal (subst_pcon s kn), pos)
 
 let subst_to_patch s (code,pl,fv) =
   code,List.rev_map (subst_patch s) pl,fv
 
+let subst_pconstant s (kn, u) = (fst (subst_con_kn s kn), u)
+
 type body_code =
   | BCdefined of to_patch
-  | BCallias of constant
+  | BCallias of pconstant
   | BCconstant
 
-let subst_body_code s = function
-  | BCdefined tp -> BCdefined (subst_to_patch s tp)
-  | BCallias kn -> BCallias (fst (subst_con_kn s kn))
-  | BCconstant -> BCconstant
+type to_patch_substituted =
+| PBCdefined of to_patch substituted
+| PBCallias of pconstant substituted
+| PBCconstant
 
-type to_patch_substituted = body_code substituted
+let from_val = function
+| BCdefined tp -> PBCdefined (from_val tp)
+| BCallias cu -> PBCallias (from_val cu)
+| BCconstant -> PBCconstant
 
-let from_val = from_val
+let force = function
+| PBCdefined tp -> BCdefined (force subst_to_patch tp)
+| PBCallias cu -> BCallias (force subst_pconstant cu)
+| PBCconstant -> BCconstant
 
-let force = force subst_body_code
+let subst_to_patch_subst s = function
+| PBCdefined tp -> PBCdefined (subst_substituted s tp)
+| PBCallias cu -> PBCallias (subst_substituted s cu)
+| PBCconstant -> PBCconstant
 
-let subst_to_patch_subst = subst_substituted
-
-let repr_body_code = repr_substituted
+let repr_body_code = function
+| PBCdefined tp ->
+  let (s, tp) = repr_substituted tp in
+  (s, BCdefined tp)
+| PBCallias cu ->
+  let (s, cu) = repr_substituted cu in
+  (s, BCallias cu)
+| PBCconstant -> (None, BCconstant)
 
 let to_memory (init_code, fun_code, fv) =
   init();

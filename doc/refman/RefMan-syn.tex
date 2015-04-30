@@ -120,7 +120,7 @@ is on Figure~\ref{init-notations}.
 
 \subsection{Complex notations}
 
-Notations can be made from arbitraly complex symbols. One can for
+Notations can be made from arbitrarily complex symbols. One can for
 instance define prefix notations.
 
 \begin{coq_example*}
@@ -405,8 +405,7 @@ where "n + m" := (plus n m).
 \end{coq_example*}
 
 \subsection{Displaying informations about notations
-\comindex{Set Printing Notations}
-\comindex{Unset Printing Notations}}
+\optindex{Printing Notations}}
 
 To deactivate the printing of all notations, use the command
 \begin{quote}
@@ -428,14 +427,16 @@ To know to which notations a given symbol belongs to, use the command
 \begin{quote}
 \tt Locate {\symbolentry}
 \end{quote}
-where symbol is any (composite) symbol surrounded by quotes. To locate
+where symbol is any (composite) symbol surrounded by double quotes. To locate
 a particular notation, use a string where the variables of the
-notation are replaced by ``\_''.
+notation are replaced by ``\_'' and where possible single quotes
+inserted around identifiers or tokens starting with a single quote are
+dropped.
 
 \Example
 \begin{coq_example}
 Locate "exists".
-Locate "'exists' _ , _".
+Locate "exists _ .. _ , _".
 \end{coq_example}
 
 \SeeAlso Section \ref{Locate}.
@@ -517,11 +518,11 @@ the next command fails because {\tt p} does not bind in
 the instance of {\tt n}.
 \begin{coq_eval}
 Set Printing Depth 50.
-(********** The following produces **********)
-(**** The reference p was not found in the current environment ********)
 \end{coq_eval}
+% (********** The following produces **********)
+% (**** The reference p was not found in the current environment ********)
 \begin{coq_example}
-Check (exists_different p).
+Fail Check (exists_different p).
 \end{coq_example}
 
 \Rem Binding variables must not necessarily be parsed using the
@@ -878,7 +879,7 @@ interpretation. See the next section.
 \SeeAlso The command to show the scopes bound to the arguments of a
 function is described in Section~\ref{About}.
 
-\subsection[The {\tt type\_scope} interpretation scope]{The {\tt type\_scope} interpretation scope\index{type\_scope}}
+\subsection[The {\tt type\_scope} interpretation scope]{The {\tt type\_scope} interpretation scope\index{type\_scope@\texttt{type\_scope}}}
 
 The scope {\tt type\_scope} has a special status. It is a primitive
 interpretation scope which is temporarily activated each time a

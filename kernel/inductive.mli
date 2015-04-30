@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -35,8 +35,6 @@ val lookup_mind_specif : env -> inductive -> mind_specif
 (** {6 Functions to build standard types related to inductive } *)
 val ind_subst : mutual_inductive -> mutual_inductive_body -> universe_instance -> constr list
 
-val inductive_instance : mutual_inductive_body -> universe_instance
-val inductive_context : mutual_inductive_body -> universe_context
 val inductive_paramdecls : mutual_inductive_body puniverses -> rel_context
 
 val instantiate_inductive_constraints : 

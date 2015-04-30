@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -181,8 +181,7 @@ let print_usage_channel co command =
 "  -I dir -as coqdir      map physical dir to logical coqdir\
 \n  -I dir                 map directory dir to the empty logical path\
 \n  -include dir           (idem)\
-\n  -R dir -as coqdir      recursively map physical dir to logical coqdir\
-\n  -R dir coqdir          (idem)\
+\n  -R dir coqdir          recursively map physical dir to logical coqdir\
 \n\
 \n  -admit module          load module and dependencies without checking\
 \n  -norec module          check module but admit dependencies without checking\

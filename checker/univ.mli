@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -119,11 +119,6 @@ exception UniverseInconsistency of univ_inconsistency
 val merge_constraints : constraints -> universes -> universes
 
 val check_constraints : constraints -> universes -> bool
-
-(** {6 Support for old-style sort-polymorphism } *)
-
-val subst_large_constraints :
-  (universe_level * universe) list -> universe -> universe
 
 (** {6 Support for universe polymorphism } *)
 

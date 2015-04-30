@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -371,6 +371,17 @@ struct
   let find_all dn = Idset.elements (TDnet.find_all dn)
 
   let map f dn = TDnet.map f (fun x -> x) dn
+
+  let refresh_metas dn =
+    let new_metas = ref Int.Map.empty in
+    let refresh_one_meta i =
+      try Int.Map.find i !new_metas
+      with Not_found ->
+        let new_meta = fresh_meta () in
+        let () = new_metas := Int.Map.add i new_meta !new_metas in
+        new_meta
+    in
+    TDnet.map_metas refresh_one_meta dn
 end
 
 module type S =
@@ -385,4 +396,5 @@ sig
   val search_pattern : t -> constr -> ident list
   val find_all : t -> ident list
   val map : (ident -> ident) -> t -> t
+  val refresh_metas : t -> t
 end

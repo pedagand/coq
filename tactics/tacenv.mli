@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -48,8 +48,8 @@ type ml_tactic =
   typed_generic_argument list -> Geninterp.interp_sign -> unit Proofview.tactic
 (** Type of external tactics, used by [TacML]. *)
 
-val register_ml_tactic : ?overwrite:bool -> ml_tactic_name -> ml_tactic -> unit
+val register_ml_tactic : ?overwrite:bool -> ml_tactic_name -> ml_tactic array -> unit
 (** Register an external tactic. *)
 
-val interp_ml_tactic : ml_tactic_name -> ml_tactic
+val interp_ml_tactic : ml_tactic_entry -> ml_tactic
 (** Get the named tactic. Raises a user error if it does not exist. *)

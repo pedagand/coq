@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -375,7 +375,9 @@ module Tactic =
       make_gen_entry utactic (rawwit wit_constr_with_bindings) "constr_with_bindings"
     let bindings =
       make_gen_entry utactic (rawwit wit_bindings) "bindings"
+    let hypident = Gram.entry_create "hypident"
     let constr_may_eval = make_gen_entry utactic (rawwit wit_constr_may_eval) "constr_may_eval"
+    let constr_eval = make_gen_entry utactic (rawwit wit_constr_may_eval) "constr_may_eval"
     let uconstr =
       make_gen_entry utactic (rawwit wit_uconstr) "uconstr"
     let quantified_hypothesis =

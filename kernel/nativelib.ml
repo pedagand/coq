@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2013     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -77,11 +77,16 @@ let call_compiler ml_filename =
     ::include_dirs
     @ ["-impl"; ml_filename] in
   if !Flags.debug then Pp.msg_debug (Pp.str (compiler_name ^ " " ^ (String.concat " " args)));
-  CUnix.sys_command compiler_name args = Unix.WEXITED 0, link_filename
+  try CUnix.sys_command compiler_name args = Unix.WEXITED 0, link_filename
+  with Unix.Unix_error (e,_,_) ->
+    Pp.(msg_warning (str (Unix.error_message e)));
+    false, link_filename
 
 let compile fn code =
   write_ml_code fn code;
-  call_compiler fn
+  let r = call_compiler fn in
+  if (not !Flags.debug) && Sys.file_exists fn then Sys.remove fn;
+  r
 
 let compile_library dir code fn =
   let header = mk_library_header dir in
@@ -92,7 +97,9 @@ let compile_library dir code fn =
   if not (Sys.file_exists dirname) then Unix.mkdir dirname 0o755;
   let fn = dirname / basename in
   write_ml_code fn ~header code;
-  fst (call_compiler fn)
+  let r = fst (call_compiler fn) in
+  if (not !Flags.debug) && Sys.file_exists fn then Sys.remove fn;
+  r
 
 (* call_linker links dynamically the code for constants in environment or a  *)
 (* conversion test. Silently fails if the file does not exist in bytecode    *)

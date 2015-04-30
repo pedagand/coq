@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -436,7 +436,7 @@ let keep_hyps env needed =
 (* Modules *)
 
 let add_modtype mtb env =
-  let mp = mtb.typ_mp in
+  let mp = mtb.mod_mp in
   let new_modtypes = MPmap.add mp mtb env.env_globals.env_modtypes in
   let new_globals = { env.env_globals with env_modtypes = new_modtypes } in
   { env with env_globals = new_globals }
@@ -473,7 +473,7 @@ type unsafe_type_judgment = {
 
 (*s Compilation of global declaration *)
 
-let compile_constant_body = Cbytegen.compile_constant_body
+let compile_constant_body = Cbytegen.compile_constant_body false
 
 exception Hyp_not_found
 
@@ -594,7 +594,7 @@ let dispatch =
   let int31_op n op prim kn =
     { empty_reactive_info with
       vm_compiling = Some (Cbytegen.op_compilation n op kn);
-      native_compiling = Some (Nativelambda.compile_prim prim kn);
+      native_compiling = Some (Nativelambda.compile_prim prim (Univ.out_punivs kn));
     }
   in
 
@@ -602,7 +602,7 @@ fun rk value field ->
   (* subfunction which shortens the (very common) dispatch of operations *)
   let int31_op_from_const n op prim =
     match kind_of_term value with
-      | Const (kn,_) ->  int31_op n op prim kn
+      | Const kn ->  int31_op n op prim kn
       | _ -> anomaly ~label:"Environ.register" (Pp.str "should be a constant")
   in
   let int31_binop_from_const op prim = int31_op_from_const 2 op prim in

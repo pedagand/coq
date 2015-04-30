@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -458,11 +458,8 @@ type inv_rel_key = int (** index in the [rel_context] part of environment
 			  starting by the end, {e inverse}
 			  of de Bruijn indice *)
 
-type id_key = Constant.t tableKey
-
 val eq_table_key : ('a -> 'a -> bool) -> 'a tableKey -> 'a tableKey -> bool
 val eq_constant_key : Constant.t -> Constant.t -> bool
-val eq_id_key : id_key -> id_key -> bool
 
 (** equalities on constant and inductive names (for the checker) *)
 

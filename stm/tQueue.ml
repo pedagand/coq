@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -79,7 +79,7 @@ let pop ?(picky=(fun _ -> true)) ?(destroy=ref false)
   Mutex.unlock m;
   x
 
-let signal_destruction { lock = m; cond = c } =
+let broadcast { lock = m; cond = c } =
   Mutex.lock m;
   Condition.broadcast c;
   Mutex.unlock m

@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -63,6 +63,8 @@ val wit_bindings :
   (constr_expr bindings,
   glob_constr_and_expr bindings,
   constr bindings Evd.sigma) genarg_type
+
+val wit_hyp_location_flag : Locus.hyp_location_flag uniform_genarg_type
 
 val wit_red_expr :
   ((constr_expr,reference or_by_notation,constr_expr) red_expr_gen,

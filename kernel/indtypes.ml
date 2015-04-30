@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -169,10 +169,12 @@ let infer_constructor_packet env_ar_par ctx params lc =
 (* If indices matter *)
 let cumulate_arity_large_levels env sign =
   fst (List.fold_right
-    (fun (_,_,t as d) (lev,env) ->
-      let tj = infer_type env t in
-      let u = univ_of_sort tj.utj_type in
-	(Universe.sup u lev, push_rel d env))
+    (fun (_,b,t as d) (lev,env) ->
+      if Option.is_empty b then
+	let tj = infer_type env t in
+	let u = univ_of_sort tj.utj_type in
+	  (Universe.sup u lev, push_rel d env)
+      else lev, push_rel d env)
     sign (Universe.type0m,env))
 
 let is_impredicative env u =
@@ -349,7 +351,7 @@ let typecheck_inductive env mie =
       in
 	(id,cn,lc,(sign,arity)))
     inds
-  in (env_arities, params, inds)
+  in (env_arities, env_ar_par, params, inds)
 
 (************************************************************************)
 (************************************************************************)
@@ -369,9 +371,8 @@ exception IllFormedInd of ill_formed_ind
 
 let mind_extract_params = decompose_prod_n_assum
 
-let explain_ind_err id ntyp env0 nbpar c nargs err =
+let explain_ind_err id ntyp env nbpar c nargs err =
   let (lpar,c') = mind_extract_params nbpar c in
-  let env = push_rel_context lpar env0 in
   match err with
     | LocalNonPos kt ->
 	raise (InductiveError (NonPos (env,c',mkRel (kt+nbpar))))
@@ -494,6 +495,7 @@ let check_positivity_one (env,_,ntypes,_ as ienv) hyps (_,i as ind) nargs lcname
               end
 	| Rel k ->
             (try let (ra,rarg) = List.nth ra_env (k-1) in
+            let largs = List.map (whd_betadeltaiota env) largs in
 	    let nmr1 =
 	      (match ra with
                   Mrec _ -> compute_rec_par ienv hyps nmr largs
@@ -664,7 +666,6 @@ let used_section_variables env inds =
   keep_hyps env ids
 
 let rel_vect n m = Array.init m (fun i -> mkRel(n+m-i))
-let rel_appvect n m = rel_vect n (List.length m)
 
 exception UndefinableExpansion
 
@@ -693,7 +694,7 @@ let compute_projections ((kn, _ as ind), u as indsp) n x nparamargs params
     let ccl' = liftn 1 2 ccl in
     let p = mkLambda (x, lift 1 rp, ccl') in
     let branch = it_mkLambda_or_LetIn (mkRel (len - i)) ctx in
-    let body = mkCase (ci, p, mkRel 1, [|branch|]) in
+    let body = mkCase (ci, p, mkRel 1, [|lift 1 branch|]) in
       it_mkLambda_or_LetIn (mkLambda (x,rp,body)) params
   in
   let projections (na, b, t) (i, j, kns, pbs, subst) =
@@ -831,9 +832,9 @@ let build_inductive env p prv ctx env_ar params kn isrecord isfinite inds nmr re
 
 let check_inductive env kn mie =
   (* First type-check the inductive definition *)
-  let (env_ar, params, inds) = typecheck_inductive env mie in
+  let (env_ar, env_ar_par, params, inds) = typecheck_inductive env mie in
   (* Then check positivity conditions *)
-  let (nmr,recargs) = check_positivity kn env_ar params inds in
+  let (nmr,recargs) = check_positivity kn env_ar_par params inds in
   (* Build the inductive packets *)
     build_inductive env mie.mind_entry_polymorphic mie.mind_entry_private
       mie.mind_entry_universes

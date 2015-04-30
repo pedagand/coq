@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -15,9 +15,7 @@ open Names
 open Constrexpr
 open Tacexpr
 open Ppextend
-open Environ
-open Pattern
-open Misctypes
+
 
 type 'a raw_extra_genarg_printer =
     (constr_expr -> std_ppcmds) ->
@@ -50,7 +48,7 @@ type pp_tactic = {
   pptac_prods : int * grammar_terminals;
 }
 
-val declare_ml_tactic_pprule : ml_tactic_name -> pp_tactic -> unit
+val declare_ml_tactic_pprule : ml_tactic_name -> pp_tactic array -> unit
 val declare_notation_tactic_pprule : KerName.t -> pp_tactic -> unit
 
 (** The default pretty-printers produce {!Pp.std_ppcmds} that are
@@ -63,3 +61,4 @@ include Pptacticsig.Pp
     located in {!Ppannotation.t}. *)
 module Richpp : Pptacticsig.Pp
 
+val ltop : tolerability

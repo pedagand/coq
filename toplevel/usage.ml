@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -23,9 +23,7 @@ let print_usage_channel co command =
   output_string co
 "  -I dir                 look for ML files in dir\
 \n  -include dir           (idem)\
-\n  -I dir -as coqdir      implicitly map physical dir to logical coqdir\
-\n  -R dir -as coqdir      recursively map physical dir to logical coqdir\
-\n  -R dir coqdir          (idem)\
+\n  -R dir coqdir          recursively map physical dir to logical coqdir\
 \n  -Q dir coqdir          map physical dir to logical coqdir\
 \n  -top coqdir            set the toplevel name to be coqdir instead of Top\
 \n  -notop                 set the toplevel name to be the empty logical path\
@@ -47,6 +45,11 @@ let print_usage_channel co command =
 \n  -require f             load Coq object file f.vo and import it (Require f.)\
 \n  -compile f             compile Coq file f.v (implies -batch)\
 \n  -compile-verbose f     verbosely compile Coq file f.v (implies -batch)\
+\n  -quick                 quickly compile .v files to .vio files (skip proofs)\
+\n  -schedule-vio2vo j f1..fn   run up to j instances of Coq to turn each fi.vio\
+\n                         into fi.vo\
+\n  -schedule-vio-checking j f1..fn   run up to j instances of Coq to check all\
+\n                         proofs in each fi.vio\
 \n\
 \n  -where                 print Coq's standard library location and exit\
 \n  -config                print Coq's configuration information and exit\
@@ -66,8 +69,10 @@ let print_usage_channel co command =
 \n  -with-geoproof (yes|no) to (de)activate special functions for Geoproof within Coqide (default is yes)\
 \n  -impredicative-set     set sort Set impredicative\
 \n  -indices-matter        levels of indices (and nonuniform parameters) contribute to the level of inductives\
-\n  -no-positivity-check   disable the positivity checker
+\n  -no-positivity-check   disable the positivity checker\
+\n  -type-in-type          disable universe consistency checking\
 \n  -time                  display the time taken by each command\
+\n  -no-native-compiler    disable the native_compute reduction machinery\
 \n  -h, -help              print this list of options\
 \n";
   List.iter (fun (name, text) ->

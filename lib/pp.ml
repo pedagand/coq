@@ -1,6 +1,6 @@
 (************************************************************************)
 (*  v      *   The Coq Proof Assistant  /  The Coq Development Team     *)
-(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2012     *)
+(* <O___,, *   INRIA - CNRS - LIX - LRI - PPS - Copyright 1999-2015     *)
 (*   \VV/  **************************************************************)
 (*    //   *      This file is distributed under the terms of the       *)
 (*         *       GNU Lesser General Public License Version 2.1        *)
@@ -387,8 +387,6 @@ let pp_with ?pp_tag ft strm =
 let ppnl_with ft strm =
   pp_dirs ft (Glue.atom (Ppdir_ppcmds (strm ++ fnl ())))
 
-let pp_flush_with ft = Format.pp_print_flush ft
-
 (* pretty printing functions WITH FLUSH *)
 let msg_with ft strm =
   pp_dirs ft (Glue.atom(Ppdir_ppcmds strm) ++ Glue.atom(Ppdir_print_flush))
@@ -519,8 +517,17 @@ let pr_arg pr x = spc () ++ pr x
 let pr_opt pr = function None -> mt () | Some x -> pr_arg pr x
 let pr_opt_no_spc pr = function None -> mt () | Some x -> pr x
 
+(** TODO: merge with CString.ordinal *)
 let pr_nth n =
-  int n ++ str (match n mod 10 with 1 -> "st" | 2 -> "nd" | 3 -> "rd" | _ -> "th")
+  let s =
+    if (n / 10) mod 10 = 1 then "th"
+    else match n mod 10 with
+    | 1 -> "st"
+    | 2 -> "nd"
+    | 3 -> "rd"
+    | _ -> "th"
+  in
+  int n ++ str s
 
 (* [prlist pr [a ; ... ; c]] outputs [pr a ++ ... ++ pr c] *)
 
