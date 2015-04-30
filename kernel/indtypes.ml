@@ -483,14 +483,14 @@ let check_positivity_one (env,_,ntypes,_ as ienv) hyps (_,i as ind) nargs lcname
       match kind_of_term x with
 	| Prod (na,b,d) ->
 	    let () = assert (List.is_empty largs) in
+            let positivity = check_pos (ienv_push_var ienv (na, b, mk_norec)) nmr d in
             if not (is_positivity_check ()) then 
-              check_pos (ienv_push_var ienv (na, b, mk_norec)) nmr d
+              positivity
             else
               begin
-            (match weaker_noccur_between env n ntypes b with
-		None -> failwith_non_pos_list n ntypes [b]
-              | Some b ->
-	          check_pos (ienv_push_var ienv (na, b, mk_norec)) nmr d)
+                match weaker_noccur_between env n ntypes b with
+		  None -> failwith_non_pos_list n ntypes [b]
+                | Some b -> positivity
               end
 	| Rel k ->
             (try let (ra,rarg) = List.nth ra_env (k-1) in
@@ -499,14 +499,9 @@ let check_positivity_one (env,_,ntypes,_ as ienv) hyps (_,i as ind) nargs lcname
                   Mrec _ -> compute_rec_par ienv hyps nmr largs
 		|  _ -> nmr)
 	    in
-            if not (is_positivity_check ()) then 
-              (nmr1,rarg)
-            else
-              begin
-	      if not (List.for_all (noccur_between n ntypes) largs)
+	      if is_positivity_check () && not (List.for_all (noccur_between n ntypes) largs)
 	      then failwith_non_pos_list n ntypes largs
 	      else (nmr1,rarg)
-              end
               with Failure _ | Invalid_argument _ -> (nmr,mk_norec))
 	| Ind ind_kn ->
             (* If the inductive type being defined appears in a
@@ -514,11 +509,9 @@ let check_positivity_one (env,_,ntypes,_ as ienv) hyps (_,i as ind) nargs lcname
             if List.for_all (noccur_between n ntypes) largs then (nmr,mk_norec)
             else check_positive_nested ienv nmr (ind_kn, largs)
 	| err ->
-	    if noccur_between n ntypes x &&
-              List.for_all (noccur_between n ntypes) largs
+	    if not (is_positivity_check ()) || (noccur_between n ntypes x &&
+              List.for_all (noccur_between n ntypes) largs)
 	    then (nmr,mk_norec)
-	    else if not (is_positivity_check ()) then 
-              (nmr,mk_norec)
             else failwith_non_pos_list n ntypes (x::largs)
 
   (* accesses to the environment are not factorised, but is it worth? *)
