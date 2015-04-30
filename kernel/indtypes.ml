@@ -30,6 +30,11 @@ let indices_matter = ref false
 let enforce_indices_matter () = indices_matter := true
 let is_indices_matter () = !indices_matter
 
+let positivity_check = ref true
+
+let disable_positivity_check () = positivity_check := false
+let is_positivity_check () = !positivity_check
+
 (* Same as noccur_between but may perform reductions.
    Could be refined more...  *)
 let weaker_noccur_between env x nvars t =
@@ -478,10 +483,15 @@ let check_positivity_one (env,_,ntypes,_ as ienv) hyps (_,i as ind) nargs lcname
       match kind_of_term x with
 	| Prod (na,b,d) ->
 	    let () = assert (List.is_empty largs) in
+            if not (is_positivity_check ()) then 
+              check_pos (ienv_push_var ienv (na, b, mk_norec)) nmr d
+            else
+              begin
             (match weaker_noccur_between env n ntypes b with
 		None -> failwith_non_pos_list n ntypes [b]
               | Some b ->
 	          check_pos (ienv_push_var ienv (na, b, mk_norec)) nmr d)
+              end
 	| Rel k ->
             (try let (ra,rarg) = List.nth ra_env (k-1) in
 	    let nmr1 =
@@ -489,9 +499,14 @@ let check_positivity_one (env,_,ntypes,_ as ienv) hyps (_,i as ind) nargs lcname
                   Mrec _ -> compute_rec_par ienv hyps nmr largs
 		|  _ -> nmr)
 	    in
+            if not (is_positivity_check ()) then 
+              (nmr1,rarg)
+            else
+              begin
 	      if not (List.for_all (noccur_between n ntypes) largs)
 	      then failwith_non_pos_list n ntypes largs
 	      else (nmr1,rarg)
+              end
               with Failure _ | Invalid_argument _ -> (nmr,mk_norec))
 	| Ind ind_kn ->
             (* If the inductive type being defined appears in a
@@ -502,7 +517,9 @@ let check_positivity_one (env,_,ntypes,_ as ienv) hyps (_,i as ind) nargs lcname
 	    if noccur_between n ntypes x &&
               List.for_all (noccur_between n ntypes) largs
 	    then (nmr,mk_norec)
-	    else failwith_non_pos_list n ntypes (x::largs)
+	    else if not (is_positivity_check ()) then 
+              (nmr,mk_norec)
+            else failwith_non_pos_list n ntypes (x::largs)
 
   (* accesses to the environment are not factorised, but is it worth? *)
   and check_positive_nested (env,n,ntypes,ra_env as ienv) nmr ((mi,u), largs) =

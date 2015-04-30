@@ -489,6 +489,7 @@ let parse_args arglist =
     |"-noinit"|"-nois" -> load_init := false
     |"-no-compat-notations" -> no_compat_ntn := true
     |"-no-glob"|"-noglob" -> Dumpglob.noglob (); glob_opt := true
+    |"-no-positivity-check" -> Indtypes.disable_positivity_check ()
     |"-no-native-compiler" -> no_native_compiler := true
     |"-notop" -> unset_toplevel_name ()
     |"-output-context" -> output_context := true

@@ -66,6 +66,7 @@ let print_usage_channel co command =
 \n  -with-geoproof (yes|no) to (de)activate special functions for Geoproof within Coqide (default is yes)\
 \n  -impredicative-set     set sort Set impredicative\
 \n  -indices-matter        levels of indices (and nonuniform parameters) contribute to the level of inductives\
+\n  -no-positivity-check   disable the positivity checker
 \n  -time                  display the time taken by each command\
 \n  -h, -help              print this list of options\
 \n";
