@@ -284,7 +284,12 @@ let translate_local_def env id centry =
 
 (* Insertion of inductive types. *)
 
-let translate_mind env kn mie = Indtypes.check_inductive env kn mie
+let translate_mind env kn mie fixl = 
+  let mentry = Indtypes.check_inductive env kn mie 
+                   (List.map (fun (kn, x) -> (Constant.label kn, x)) fixl) in
+  let env' = Environ.add_mind kn mentry [] env in 
+  let decl = List.map (fun (kn,f) -> (kn, translate_constant env' kn f)) fixl in
+  mentry, decl
 
 let handle_entry_side_effects env ce = { ce with
   const_entry_body = Future.chain ~greedy:true ~pure:true

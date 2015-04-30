@@ -214,7 +214,19 @@ let param_ccls params =
 (* TODO check that we don't overgeneralize construcors/inductive arities with
    universes that are absent from them. Is it possible? 
 *)
-let typecheck_inductive env mie =
+
+let type_of_constant_entry centry = match centry with
+  | DefinitionEntry dentry -> 
+     begin
+       match dentry.const_entry_type with
+         Some typ -> typ
+        | None -> anomaly (Pp.str "bli.")
+     end
+  | ParameterEntry (_, _, (typ, _), _) -> typ
+  | ProjectionEntry _ -> anomaly (Pp.str "Blah.")
+
+
+let typecheck_inductive env mie fixl =
   let () = match mie.mind_entry_inds with
   | [] -> anomaly (Pp.str "empty inductive types declaration")
   | _ -> ()
@@ -275,6 +287,11 @@ let typecheck_inductive env mie =
 
   (* builds the typing context "Gamma, I1:A1, ... In:An, params" *)
   let env_ar_par = push_rel_context params env_arities in
+  let env_ar_par = push_rel_context
+               (List.map (fun (l,f) ->  
+                          (Name (Label.to_id l), 
+                           None, 
+                           type_of_constant_entry f)) fixl) env_ar_par in
 
   (* Now, we type the constructors (without params) *)
   let inds =
@@ -836,9 +853,9 @@ let build_inductive env p prv ctx env_ar params kn isrecord isfinite inds nmr re
 (************************************************************************)
 (************************************************************************)
 
-let check_inductive env kn mie =
+let check_inductive env kn mie fixl =
   (* First type-check the inductive definition *)
-  let (env_ar, params, inds) = typecheck_inductive env mie in
+  let (env_ar, params, inds) = typecheck_inductive env mie fixl in
   (* Then check positivity conditions *)
   let (nmr,recargs) = check_positivity kn env_ar params inds in
   (* Build the inductive packets *)

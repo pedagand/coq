@@ -37,7 +37,8 @@ val push_named_def   : (Id.t * Entries.definition_entry) -> unit
 val add_constant :
   DirPath.t -> Id.t -> Safe_typing.global_declaration -> constant
 val add_mind :
-  DirPath.t -> Id.t -> Entries.mutual_inductive_entry -> mutual_inductive
+  DirPath.t -> Id.t -> Entries.mutual_inductive_entry ->
+  (Names.Constant.t * Entries.constant_entry) list -> mutual_inductive
 
 (** Extra universe constraints *)
 val add_constraints : Univ.constraints -> unit

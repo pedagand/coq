@@ -68,7 +68,7 @@ val set_declare_scheme :
 (** [declare_mind me] declares a block of inductive types with
    their constructors in the current section; it returns the path of
    the whole block and a boolean indicating if it is a primitive record. *)
-val declare_mind : mutual_inductive_entry -> object_name * bool
+val declare_mind : mutual_inductive_entry * (Names.Constant.t * Entries.constant_entry) list -> object_name * bool
 
 (** Declaration messages *)
 

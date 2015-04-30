@@ -176,7 +176,8 @@ val is_projection : constant -> env -> bool
 
 (** {5 Inductive types } *)
 val add_mind_key : mutual_inductive -> Pre_env.mind_key -> env -> env
-val add_mind : mutual_inductive -> mutual_inductive_body -> env -> env
+val add_mind : mutual_inductive -> mutual_inductive_body -> 
+               (Names.Constant.t * constant_body) list -> env -> env
 
 (** Looks up in the context of global inductive names 
    raises [Not_found] if the required path is not found *)

@@ -365,8 +365,11 @@ let add_mind_key kn mind_key env =
 	env_inductives = new_inds } in
   { env with env_globals = new_globals }
 
-let add_mind kn mib env =
-  let li = ref no_link_info in add_mind_key kn (mib, li) env
+let add_mind kn mib fixl env =
+  let li = ref no_link_info in
+  let env = add_mind_key kn (mib, li) env in
+  List.fold_left (fun env (n, dec) -> add_constant n dec env) env fixl 
+
 
 (* Lookup of section variables *)
 

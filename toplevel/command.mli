@@ -75,6 +75,14 @@ type structured_one_inductive_expr = {
   ind_lc : (Id.t * constr_expr) list
 }
 
+type structured_fixpoint_expr = {
+  fix_name : Id.t;
+  fix_annot : Id.t Loc.located option;
+  fix_binders : local_binder list;
+  fix_body : constr_expr option;
+  fix_type : constr_expr
+}
+
 type structured_inductive_expr =
   local_binder list * structured_one_inductive_expr list
 
@@ -89,7 +97,9 @@ type one_inductive_impls =
   Impargs.manual_implicits list (** for constrs *)
 
 val interp_mutual_inductive :
-  structured_inductive_expr -> decl_notation list -> polymorphic ->
+  structured_inductive_expr -> 
+  structured_fixpoint_expr list ->
+  decl_notation list -> polymorphic ->
     private_flag -> Decl_kinds.recursivity_kind ->
     mutual_inductive_entry * one_inductive_impls list
 
@@ -103,18 +113,12 @@ val declare_mutual_inductive_with_eliminations :
 (** Entry points for the vernacular commands Inductive and CoInductive *)
 
 val do_mutual_inductive :
-  (one_inductive_expr * decl_notation list) list -> polymorphic -> 
+  (one_inductive_expr * decl_notation list) list -> 
+  (fixpoint_expr * decl_notation list) list -> polymorphic -> 
   private_flag -> Decl_kinds.recursivity_kind -> unit
 
 (** {6 Fixpoints and cofixpoints} *)
 
-type structured_fixpoint_expr = {
-  fix_name : Id.t;
-  fix_annot : Id.t Loc.located option;
-  fix_binders : local_binder list;
-  fix_body : constr_expr option;
-  fix_type : constr_expr
-}
 
 (** Extracting the semantical components out of the raw syntax of
    (co)fixpoints declarations *)

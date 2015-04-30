@@ -524,7 +524,7 @@ let vernac_record k poly finite struc binders sort nameopt cfs =
 	| _ -> ()) cfs);
     ignore(Record.definition_structure (k,poly,finite,struc,binders,cfs,const,sort))
 
-let vernac_inductive poly lo finite indl =
+let vernac_inductive poly lo finite indl fixl =
   if Dumpglob.dump () then
     List.iter (fun (((coe,lid), _, _, _, cstrs), _) ->
       match cstrs with
@@ -561,7 +561,7 @@ let vernac_inductive poly lo finite indl =
       | _ -> Errors.error "Cannot handle mutually (co)inductive records."
     in
     let indl = List.map unpack indl in
-    do_mutual_inductive indl poly lo finite
+    do_mutual_inductive indl fixl poly lo finite
 
 let vernac_fixpoint locality poly local l =
   let local = enforce_locality_exp locality local in
@@ -1859,7 +1859,7 @@ let interp ?proof locality poly c =
   | VernacEndProof e -> vernac_end_proof ?proof e
   | VernacExactProof c -> vernac_exact_proof c
   | VernacAssumption (stre,nl,l) -> vernac_assumption locality poly stre l nl
-  | VernacInductive (priv,finite,l) -> vernac_inductive poly priv finite l
+  | VernacInductive (priv,finite,l,l') -> vernac_inductive poly priv finite l l'
   | VernacFixpoint (local, l) -> vernac_fixpoint locality poly local l
   | VernacCoFixpoint (local, l) -> vernac_cofixpoint locality poly local l
   | VernacScheme l -> vernac_scheme l
