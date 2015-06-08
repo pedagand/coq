@@ -550,7 +550,7 @@ let compute_possible_guardness_evidences (ids,_,na) =
 type recursive_preentry =
   Id.t list * constr option list * types list
 
-let interp_recursive env evdref isfix fixl notations =
+let interp_recursive with_evars env evdref isfix fixl notations =
   let fixnames = List.map (fun fix -> fix.fix_name) fixl in
 
   (* Interp arities allowing for unresolved types *)
@@ -574,12 +574,12 @@ let interp_recursive env evdref isfix fixl notations =
 		 Typing.solve_evars env evdref app
 	     with e  when Errors.noncritical e -> t
 	   in
-	     (id,None,fixprot) :: env'
-	 else (id,None,t) :: env')
+	     (Name id, None, lift (List.length env') fixprot) :: env'
+	 else (Name id, None, lift (List.length env') t) :: env')
       [] fixnames fixtypes
   in
-  let env_rec = push_named_context rec_sign env in
-  let evd = consider_remaining_unif_problems env_rec !evdref in
+  let env_rec = push_rel_context rec_sign env in
+  let evd = if not with_evars then consider_remaining_unif_problems env_rec !evdref else !evdref in
   (* Get interpretation metadatas *)
   let impls = compute_internalization_env env Recursive fixnames fixtypes fiximps in
   let fixctxnames = List.map (fun (_,ctx) -> List.map pi1 ctx) fixctxs in
@@ -589,6 +589,7 @@ let interp_recursive env evdref isfix fixl notations =
 
 let interp_recursive_body fixl notations (env, rec_sign, evd, fixctxs, fixccls, fixnames, fixtypes, impls, fixctximpenvs, fixmeta) =
   let evdref = ref evd in
+  let rec_sign = List.map (fun (id,b,t) -> out_name id, b, t) rec_sign in
   let env_rec = push_named_context rec_sign env in
 
   (* Interp bodies with rollback because temp use of notations/implicit *)
@@ -601,7 +602,7 @@ let interp_recursive_body fixl notations (env, rec_sign, evd, fixctxs, fixccls, 
       () in
 
   (* Instantiate evars and check all are resolved *)
-  let evd, nf = nf_evars_and_universes evd in
+  let evd, nf = nf_evars_and_universes !evdref in
   let fixdefs = List.map (Option.map nf) fixdefs in
   let fixtypes = List.map nf fixtypes in
 
@@ -611,7 +612,7 @@ let interp_recursive_body fixl notations (env, rec_sign, evd, fixctxs, fixccls, 
 let interp_recursive_env isfix fixl notations =
   let env = Global.env() in
   let evdref = ref (Evd.from_env env) in
-  interp_recursive_body fixl notations (interp_recursive env evdref isfix fixl notations)
+  interp_recursive_body fixl notations (interp_recursive true env evdref isfix fixl notations)
 
 let declare_fix ?(opaque = false) (_,poly,_ as kind) ctx f ((def,_),eff) t imps =
   let ce = definition_entry ~types:t ~poly ~univs:ctx ~eff def in
@@ -647,16 +648,16 @@ let interp_mutual_inductive (paramsl,indl) fixl notations poly prv finite =
   let impls = compute_internalization_env env0 (Inductive params) indnames fullarities indimpls in
   let mldatas = List.map2 (mk_mltype_data evdref env_params params) arities indnames in
 
-  let (env_rec, rec_sign, evd, fixctxs, fixccls, fixnames, fixtypes, impls, fixctximpenvs, fixmeta) 
-    = interp_recursive env_ar evdref true fixl notations in
-  let env_ar_params = push_rel_context ctx_params env_rec in
+  let (env_rec, rec_sign, evd, fixctxs, fixccls, fixnames, fixtypes, fiximpls, fixctximpenvs, fixmeta) 
+    = interp_recursive false env_ar evdref true fixl notations in
+  let env_ar_fix_params = push_rel_context ctx_params (push_rel_context rec_sign env_ar) in
 
   let constructors =
     Metasyntax.with_syntax_protection (fun () ->
      (* Temporary declaration of notations and scopes *)
      List.iter (Metasyntax.set_notation_for_interpretation impls) notations;
      (* Interpret the constructor types *)
-     List.map3 (interp_cstrs env_ar_params evdref impls) mldatas arities indl)
+     List.map3 (interp_cstrs env_ar_fix_params evdref impls) mldatas arities indl)
      () in
 
   (* Try further to solve evars, and instantiate them *)
@@ -667,7 +668,7 @@ let interp_mutual_inductive (paramsl,indl) fixl notations poly prv finite =
   let arities = List.map nf arities in
   let constructors = List.map (fun (idl,cl,impsl) -> (idl,List.map nf cl,impsl)) constructors in
   let _ = List.iter2 (fun ty poly -> make_conclusion_flexible evdref ty poly) arities aritypoly in
-  let arities = inductive_levels env_ar_params evdref poly arities constructors in
+  let arities = inductive_levels env_ar_fix_params evdref poly arities constructors in
   let nf',_ = e_nf_evars_and_universes evdref in
   let nf x = nf' (nf x) in
   let arities = List.map nf' arities in
@@ -677,26 +678,8 @@ let interp_mutual_inductive (paramsl,indl) fixl notations poly prv finite =
   List.iter (check_evars env_params Evd.empty evd) arities;
   iter_rel_context (check_evars env0 Evd.empty evd) ctx_params;
   List.iter (fun (_,ctyps,_) ->
-    List.iter (check_evars env_ar_params Evd.empty evd) ctyps)
+    List.iter (check_evars env_ar_fix_params Evd.empty evd) ctyps)
     constructors;
-
-  (* Build the inductive entries *)
-  let entries = List.map4 (fun ind arity template (cnames,ctypes,cimpls) -> {
-    mind_entry_typename = ind.ind_name;
-    mind_entry_arity = arity;
-    mind_entry_template = template;
-    mind_entry_consnames = cnames;
-    mind_entry_lc = ctypes
-  }) indl arities aritypoly constructors in
-  let impls' =
-    let len = rel_context_nhyps ctx_params in
-      List.map2 (fun indimpls (_,_,cimpls) ->
-	indimpls, List.map (fun impls ->
-	  userimpls @ (lift_implicits len impls)) cimpls) indimpls constructors
-  in
-
-  let indnames = List.map (fun ind -> ind.ind_name) indl in
-  let indname = List.hd indnames in
   let make_name f id = f (Safe_typing.current_modpath (Global.safe_env ())) 
                      (Global.current_dirpath ()) (Label.of_id id) in 
 
@@ -707,6 +690,25 @@ let interp_mutual_inductive (paramsl,indl) fixl notations poly prv finite =
         ParameterEntry (None,false, (t, Univ.UContext.empty), None)) :: env')
       [] fixnames fixtypes
   in
+  let fixsubst = List.map (fun (x,_) -> mkConst x) fixdecls in
+
+  (* Build the inductive entries *)
+  let entries = List.map4 (fun ind arity template (cnames,ctypes,cimpls) -> {
+    mind_entry_typename = ind.ind_name;
+    mind_entry_arity = arity;
+    mind_entry_template = template;
+    mind_entry_consnames = cnames;
+    mind_entry_lc = List.map (substnl fixsubst (List.length ctx_params)) ctypes;
+  }) indl arities aritypoly constructors in
+  let impls' =
+    let len = rel_context_nhyps ctx_params in
+      List.map2 (fun indimpls (_,_,cimpls) ->
+	indimpls, List.map (fun impls ->
+	  userimpls @ (lift_implicits len impls)) cimpls) indimpls constructors
+  in
+
+  let indnames = List.map (fun ind -> ind.ind_name) indl in
+  let indname = List.hd indnames in
   let mentry =   { mind_entry_params = List.map prepare_param ctx_params;
     mind_entry_record = None;
     mind_entry_finite = finite;
@@ -719,32 +721,34 @@ let interp_mutual_inductive (paramsl,indl) fixl notations poly prv finite =
                                               fixdecls in
   let env = Environ.add_mind kn mib cbs env0 in
 
-  let ((env,rec_sign,evd), (fixnames,fixdefs,fixtypes), fixmeta) = 
-    interp_recursive_body fixl notations (env, rec_sign, evd, fixctxs, fixccls, fixnames, fixtypes, impls, fixctximpenvs, fixmeta) in
- 
-  let indexes =
-    List.map compute_possible_guardness_evidences fixmeta in
-  let fixdefs = List.map Option.get fixdefs in
-  let fixdecls = prepare_recursive_declaration fixnames fixtypes fixdefs in
-  let indexes = search_guard Loc.ghost env indexes fixdecls in 
-  let fiximps = List.map (fun (n,r,p) -> r) fixmeta in
-  let vars = Universes.universes_of_constr (mkFix ((indexes,0),fixdecls)) in
-  let fixdecls =
-    List.map_i (fun i _ -> mkFix ((indexes,i),fixdecls)) 0 fixnames in
-  let ctx = Evd.evar_universe_context_set (Evd.evar_universe_context evd) in
-  let ctx = Universes.restrict_universe_context ctx vars in
-(*let fixdecls = List.map Term_typing.mk_pure_proof fixdecls in *)
-  let ctx = Univ.ContextSet.to_context ctx in
-  ignore (List.map4 (fun id def t _ ->
-                     (make_name make_con id,
-                     definition_entry ~types:t ~poly (*~univs:ctx ~eff*) def))
-	            fixnames fixdecls fixtypes fiximps);
-  (* Declare the recursive definitions *)
-  fixpoint_message (Some indexes) fixnames;
-
-
+  let fixl =
+    if List.is_empty fixl then [] else
+      let ((env,rec_sign,evd), (fixnames,fixdefs,fixtypes), fixmeta) = 
+	interp_recursive_body fixl notations 
+          (env, rec_sign, evd, fixctxs, fixccls, fixnames, fixtypes, fiximpls, fixctximpenvs, fixmeta)
+      in
+      let indexes =
+	List.map compute_possible_guardness_evidences fixmeta in
+      let fixdefs = List.map Option.get fixdefs in
+      let fixdecls = prepare_recursive_declaration fixnames fixtypes fixdefs in
+      let indexes = search_guard Loc.ghost env indexes fixdecls in 
+      let fiximps = List.map (fun (n,r,p) -> r) fixmeta in
+      let vars = Universes.universes_of_constr (mkFix ((indexes,0),fixdecls)) in
+      let fixdecls =
+	List.map_i (fun i _ -> mkFix ((indexes,i),fixdecls)) 0 fixnames in
+      let ctx = Evd.evar_universe_context_set (Evd.evar_universe_context evd) in
+      let ctx = Universes.restrict_universe_context ctx vars in
+      (*let fixdecls = List.map Term_typing.mk_pure_proof fixdecls in *)
+      let ctx = Univ.ContextSet.to_context ctx in
+        (* Declare the recursive definitions *)
+        fixpoint_message (Some indexes) fixnames;
+        List.map4 (fun id def t _ ->
+                   (make_name make_con id,
+                    DefinitionEntry (definition_entry ~types:t ~poly ~univs:ctx (*~eff*) def)))
+	          fixnames fixdecls fixtypes fiximps
+  in
   (* Build the mutual inductive entry *)
-  mentry, impls'
+  mentry, impls', fixl
 
 (* Very syntactical equality *)
 let eq_local_binders bl1 bl2 =
@@ -793,7 +797,7 @@ let is_recursive mie =
       List.exists (fun t -> is_recursive_constructor (nparams+1) t) ind.mind_entry_lc
   | _ -> false
 
-let declare_mutual_inductive_with_eliminations mie impls =
+let declare_mutual_inductive_with_eliminations mie impls fixl =
   (* spiwack: raises an error if the structure is supposed to be non-recursive,
         but isn't *)
   begin match mie.mind_entry_finite with
@@ -806,7 +810,7 @@ let declare_mutual_inductive_with_eliminations mie impls =
   | _ -> ()
   end;
   let names = List.map (fun e -> e.mind_entry_typename) mie.mind_entry_inds in
-  let (_, kn), prim = declare_mind (mie, []) in
+  let (_, kn), prim = declare_mind (mie, fixl) in
   let mind = Global.mind_of_delta_kn kn in
   List.iteri (fun i (indimpls, constrimpls) ->
 		   let ind = (mind,i) in
@@ -844,9 +848,9 @@ let do_mutual_inductive indl fixl poly prv finite =
   let indl,coes,ntns = extract_mutual_inductive_declaration_components indl in
   let fixl, _ = extract_fixpoint_components true fixl in
   (* Interpret the types *)
-  let mie,impls = interp_mutual_inductive indl fixl ntns poly prv finite in
+  let mie,impls,fixl = interp_mutual_inductive indl fixl ntns poly prv finite in
   (* Declare the mutual inductive block with its associated schemes *)
-  ignore (declare_mutual_inductive_with_eliminations mie impls);
+  ignore (declare_mutual_inductive_with_eliminations mie impls fixl);
   (* Declare the possible notations of inductive types *)
   List.iter Metasyntax.add_notation_interpretation ntns;
   (* Declare the coercions *)

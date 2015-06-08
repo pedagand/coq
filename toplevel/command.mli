@@ -100,13 +100,15 @@ val interp_mutual_inductive :
   structured_fixpoint_expr list ->
   decl_notation list -> polymorphic ->
     private_flag -> Decl_kinds.recursivity_kind ->
-    mutual_inductive_entry * one_inductive_impls list
+    mutual_inductive_entry * one_inductive_impls list *
+    (Names.Constant.t * Entries.constant_entry) list
 
 (** Registering a mutual inductive definition together with its
    associated schemes *)
 
 val declare_mutual_inductive_with_eliminations :
   mutual_inductive_entry -> one_inductive_impls list ->
+  (Names.Constant.t * Entries.constant_entry) list ->
   mutual_inductive
 
 (** Entry points for the vernacular commands Inductive and CoInductive *)

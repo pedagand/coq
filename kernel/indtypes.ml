@@ -288,19 +288,19 @@ let typecheck_inductive env mie fixl =
   let arity_list = List.rev rev_arity_list in
 
   (* builds the typing context "Gamma, I1:A1, ... In:An, params" *)
-  let env_ar_par = push_rel_context params env_arities in
-  let env_ar_par = push_rel_context
+  let env_ar_fix = push_rel_context
                (List.map (fun (l,f) ->  
                           (Name (Label.to_id l), 
                            None, 
-                           type_of_constant_entry f)) fixl) env_ar_par in
+                           type_of_constant_entry f)) fixl) env_arities in
+  let env_ar_fix_par = push_rel_context params env_ar_fix in
 
   (* Now, we type the constructors (without params) *)
   let inds =
     List.fold_right2
       (fun ind arity_data inds ->
 	 let (lc',cstrs_univ) =
-	   infer_constructor_packet env_ar_par ContextSet.empty
+	   infer_constructor_packet env_ar_fix_par ContextSet.empty
 	     params ind.mind_entry_lc in
 	 let consnames = ind.mind_entry_consnames in
 	 let ind' = (arity_data,consnames,lc',cstrs_univ) in
@@ -368,7 +368,7 @@ let typecheck_inductive env mie fixl =
       in
 	(id,cn,lc,(sign,arity)))
     inds
-  in (env_arities, env_ar_par, params, inds)
+  in (env_arities, env_ar_fix_par, params, inds)
 
 (************************************************************************)
 (************************************************************************)
