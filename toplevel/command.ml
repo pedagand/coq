@@ -56,13 +56,19 @@ let well_founded = init_constant ["Init"; "Wf"] "well_founded"
 let mkSubset name typ prop =
   mkApp (Universes.constr_of_global (delayed_force build_sigma).typ,
 	 [| typ; mkLambda (name, typ, prop) |])
-let sigT = Lazy.lazy_from_fun build_sigma_type
+let sigT = Lazy.from_fun build_sigma_type
 
 let make_qref s = Qualid (Loc.ghost, qualid_of_string s)
 let lt_ref = make_qref "Init.Peano.lt"
 
+(* FIXME export from declareops *)
 
-
+let subst_rel_context k subst ctx = 
+  let (_, ctx') = List.fold_right 
+    (fun (id, b, t) (k, ctx') ->
+      (succ k, (id, Option.map (substnl subst k) b, substnl subst k t) :: ctx'))
+    ctx (k, [])
+  in ctx'
 
 
 
@@ -516,18 +522,18 @@ let interp_fix_context env evdref isfix fix =
   let impl_env, ((env', ctx), imps) = interp_context_evars env evdref before in
   let impl_env', ((env'', ctx'), imps') = interp_context_evars ~impl_env env' evdref after in
   let annot = Option.map (fun _ -> List.length (assums_of_rel_context ctx)) fix.fix_annot in
-    ((env'', ctx' @ ctx), (impl_env',imps @ imps'), annot)
+    ((ctx' @ ctx), (impl_env',imps @ imps'), annot)
 
-let interp_fix_ccl evdref impls (env,_) fix =
-  interp_type_evars_impls ~impls env evdref fix.fix_type
+let interp_fix_ccl env evdref impls ctx fix =
+  interp_type_evars_impls ~impls (push_rel_context ctx env) evdref fix.fix_type
 
-let interp_fix_body env_rec evdref impls (_,ctx) fix ccl =
+let interp_fix_body env_rec evdref impls ctx fix ccl =
   Option.map (fun body ->
     let env = push_rel_context ctx env_rec in
     let body = interp_casted_constr_evars env evdref ~impls body ccl in
     it_mkLambda_or_LetIn body ctx) fix.fix_body
 
-let build_fix_type (_,ctx) ccl = it_mkProd_or_LetIn ccl ctx
+let build_fix_type ctx ccl = it_mkProd_or_LetIn ccl ctx
 
 let prepare_recursive_declaration fixnames fixtypes fixdefs =
   let defs = List.map (subst_vars (List.rev fixnames)) fixdefs in
@@ -557,11 +563,11 @@ let interp_recursive with_evars env evdref isfix fixl notations =
   let fixctxs, fiximppairs, fixannots =
     List.split3 (List.map (interp_fix_context env evdref isfix) fixl) in
   let fixctximpenvs, fixctximps = List.split fiximppairs in
-  let fixccls,fixcclimps = List.split (List.map3 (interp_fix_ccl evdref) fixctximpenvs fixctxs fixl) in
+  let fixccls,fixcclimps = List.split (List.map3 (interp_fix_ccl env evdref) fixctximpenvs fixctxs fixl) in
   let fixtypes = List.map2 build_fix_type fixctxs fixccls in
   let fixtypes = List.map (nf_evar !evdref) fixtypes in
   let fiximps = List.map3
-    (fun ctximps cclimps (_,ctx) -> ctximps@(Impargs.lift_implicits (List.length ctx) cclimps))
+    (fun ctximps cclimps ctx -> ctximps@(Impargs.lift_implicits (List.length ctx) cclimps))
     fixctximps fixcclimps fixctxs in
   let rec_sign =
     List.fold_left2
@@ -582,14 +588,15 @@ let interp_recursive with_evars env evdref isfix fixl notations =
   let evd = if not with_evars then consider_remaining_unif_problems env_rec !evdref else !evdref in
   (* Get interpretation metadatas *)
   let impls = compute_internalization_env env Recursive fixnames fixtypes fiximps in
-  let fixctxnames = List.map (fun (_,ctx) -> List.map pi1 ctx) fixctxs in
+  let fixctxnames = List.map (fun ctx -> List.map pi1 ctx) fixctxs in
 
   (env, rec_sign, evd, fixctxs, fixccls, fixnames, fixtypes, impls, fixctximpenvs, List.combine3 fixctxnames fiximps fixannots)
 
 
-let interp_recursive_body fixl notations (env, rec_sign, evd, fixctxs, fixccls, fixnames, fixtypes, impls, fixctximpenvs, fixmeta) =
+let interp_recursive_body fixl notations indsubst
+  (env, rec_sign, evd, fixctxs, fixccls, fixnames, fixtypes, impls, fixctximpenvs, fixmeta) =
   let evdref = ref evd in
-  let rec_sign = List.map (fun (id,b,t) -> out_name id, b, t) rec_sign in
+  let rec_sign = List.map (fun (id,b,t) -> out_name id, b, substl indsubst t) rec_sign in
   let env_rec = push_named_context rec_sign env in
 
   (* Interp bodies with rollback because temp use of notations/implicit *)
@@ -597,7 +604,9 @@ let interp_recursive_body fixl notations (env, rec_sign, evd, fixctxs, fixccls, 
     Metasyntax.with_syntax_protection (fun () ->
       List.iter (Metasyntax.set_notation_for_interpretation impls) notations;
       List.map4
-	(fun fixctximpenv -> interp_fix_body env_rec evdref (Id.Map.fold Id.Map.add fixctximpenv impls))
+	(fun fixctximpenv ctx -> 
+	   interp_fix_body env_rec evdref (Id.Map.fold Id.Map.add fixctximpenv impls)
+			   (subst_rel_context 0 indsubst ctx))
 	fixctximpenvs fixctxs fixl fixccls)
       () in
 
@@ -612,7 +621,7 @@ let interp_recursive_body fixl notations (env, rec_sign, evd, fixctxs, fixccls, 
 let interp_recursive_env isfix fixl notations =
   let env = Global.env() in
   let evdref = ref (Evd.from_env env) in
-  interp_recursive_body fixl notations (interp_recursive true env evdref isfix fixl notations)
+  interp_recursive_body fixl notations [] (interp_recursive true env evdref isfix fixl notations)
 
 let declare_fix ?(opaque = false) (_,poly,_ as kind) ctx f ((def,_),eff) t imps =
   let ce = definition_entry ~types:t ~poly ~univs:ctx ~eff def in
@@ -698,7 +707,7 @@ let interp_mutual_inductive (paramsl,indl) fixl notations poly prv finite =
     mind_entry_arity = arity;
     mind_entry_template = template;
     mind_entry_consnames = cnames;
-    mind_entry_lc = List.map (substnl fixsubst (List.length ctx_params)) ctypes;
+    mind_entry_lc = (*List.map (substnl fixsubst (List.length ctx_params))  *)ctypes;
   }) indl arities aritypoly constructors in
   let impls' =
     let len = rel_context_nhyps ctx_params in
@@ -709,13 +718,14 @@ let interp_mutual_inductive (paramsl,indl) fixl notations poly prv finite =
 
   let indnames = List.map (fun ind -> ind.ind_name) indl in
   let indname = List.hd indnames in
+  let univs = Evd.universe_context evd in
   let mentry =   { mind_entry_params = List.map prepare_param ctx_params;
     mind_entry_record = None;
     mind_entry_finite = finite;
     mind_entry_inds = entries;
     mind_entry_polymorphic = poly;
     mind_entry_private = if prv then Some false else None;
-    mind_entry_universes = Evd.universe_context evd } in
+    mind_entry_universes = univs } in
   let kn = make_name make_mind indname in
   let (mib, cbs) = Term_typing.translate_mind env0 kn mentry 
                                               fixdecls in
@@ -724,7 +734,7 @@ let interp_mutual_inductive (paramsl,indl) fixl notations poly prv finite =
   let fixl =
     if List.is_empty fixl then [] else
       let ((env,rec_sign,evd), (fixnames,fixdefs,fixtypes), fixmeta) = 
-	interp_recursive_body fixl notations 
+	interp_recursive_body fixl notations (Inductive.ind_subst kn mib (Univ.UContext.instance univs))
           (env, rec_sign, evd, fixctxs, fixccls, fixnames, fixtypes, fiximpls, fixctximpenvs, fixmeta)
       in
       let indexes =

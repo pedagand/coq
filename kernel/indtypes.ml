@@ -227,6 +227,7 @@ let type_of_constant_entry centry = match centry with
   | ParameterEntry (_, _, (typ, _), _) -> typ
   | ProjectionEntry _ -> anomaly (Pp.str "Blah.")
 
+let translate_constant_ref = ref (fun _ _ _ -> assert false)
 
 let typecheck_inductive env mie fixl =
   let () = match mie.mind_entry_inds with
@@ -290,7 +291,7 @@ let typecheck_inductive env mie fixl =
   (* builds the typing context "Gamma, I1:A1, ... In:An, params" *)
   let env_ar_fix = push_rel_context
                (List.map (fun (l,f) ->  
-                          (Name (Label.to_id l), 
+                          (Name (Label.to_id (Constant.label l)), 
                            None, 
                            type_of_constant_entry f)) fixl) env_arities in
   let env_ar_fix_par = push_rel_context params env_ar_fix in
@@ -588,15 +589,16 @@ let check_positivity_one (env,_,ntypes,_ as ienv) hyps (_,i as ind) nargs lcname
                 check_constr_rec ienv' nmr' (recarg::lrec) d
           | hd ->
             let () =
-              if check_head then
-                begin match hd with
-                | Rel j when Int.equal j (n + ntypes - i - 1) ->
-                  check_correct_par ienv hyps (ntypes - i) largs
-                | _ -> raise (IllFormedInd LocalNotConstructor)
+	      if is_positivity_check () then
+                if check_head then
+		begin match hd with
+                      | Rel j when Int.equal j (n + ntypes (* + nfix *) - i - 1) ->
+			 check_correct_par ienv hyps (ntypes (* + nfix  *)- i) largs
+                      | _ -> raise (IllFormedInd LocalNotConstructor)
                 end
-              else
-                if not (List.for_all (noccur_between n ntypes) largs)
-                then failwith_non_pos_list n ntypes largs
+		else
+                  if not (List.for_all (noccur_between n ntypes) largs)
+                  then failwith_non_pos_list n ntypes largs
             in
             (nmr, List.rev lrec)
     in check_constr_rec ienv nmr [] c
@@ -737,7 +739,7 @@ let compute_projections ((kn, _ as ind), u as indsp) n x nparamargs params
     Array.of_list (List.rev kns),
     Array.of_list (List.rev pbs)
 
-let build_inductive env p prv ctx env_ar params kn isrecord isfinite inds nmr recargs =
+let build_inductive env p prv ctx env_ar params kn isrecord isfinite inds nmr recargs fixl =
   let ntypes = Array.length inds in
   (* Compute the set of used section variables *)
   let hyps = used_section_variables env inds in
@@ -750,9 +752,11 @@ let build_inductive env p prv ctx env_ar params kn isrecord isfinite inds nmr re
     let ctx' = Vars.subst_univs_level_context subst ctx in
       Environ.push_rel_context ctx' env
   in
+  let fixsubst = List.map (fun (l, f) -> mkVar (Label.to_id (Constant.label l))) fixl in
   (* Check one inductive *)
   let build_one_packet (id,cnames,lc,(ar_sign,ar_kind)) recarg =
     (* Type of constructors in normal form *)
+    let lc = Array.map (substl fixsubst) lc in
     let lc = Array.map (Vars.subst_univs_level_constr subst) lc in
     let splayed_lc = Array.map (dest_prod_assum env_ar) lc in
     let nf_lc = Array.map (fun (d,b) -> it_mkProd_or_LetIn b d) splayed_lc in
@@ -844,6 +848,38 @@ let build_inductive env p prv ctx env_ar params kn isrecord isfinite inds nmr re
       mind_private = prv;
     }
 
+let map_const_entry_body (f:Term.constr->Term.constr) (x:Entries.const_entry_body)
+    : Entries.const_entry_body =
+  Future.chain ~pure:true x begin fun ((b,ctx),fx) ->
+    (f b , ctx) , fx
+  end
+
+let typecheck_fixl env kn mbs fixl =
+  let fixenv = Environ.add_mind kn mbs [] env in
+  let subst = Inductive.ind_subst kn mbs Univ.Instance.empty in
+  let fixenv =
+    List.fold_left
+      (fun env (l,f) ->  
+       let typ = type_of_constant_entry f in
+	 (* Check typ *)
+	 Environ.push_named (Label.to_id (Constant.label l), None, 
+			     substl subst typ) env)
+      fixenv fixl
+  in
+  let tr_one (l,ce) = 
+    let ce' =
+      match ce with
+      | ParameterEntry (sec,b,(typ,u),inl) ->
+	 ParameterEntry (sec,b,(substl subst typ,u),inl)
+      | DefinitionEntry cste ->
+	 DefinitionEntry { cste with
+			 const_entry_body = map_const_entry_body (substl subst) cste.const_entry_body;
+			 const_entry_type = Option.map (substl subst) cste.const_entry_type }
+      | ProjectionEntry _ -> assert false
+    in
+      (l, !translate_constant_ref fixenv l ce') in
+    List.map tr_one fixl
+
 (************************************************************************)
 (************************************************************************)
 
@@ -853,7 +889,10 @@ let check_inductive env kn mie fixl =
   (* Then check positivity conditions *)
   let (nmr,recargs) = check_positivity kn env_ar_par params inds in
   (* Build the inductive packets *)
-    build_inductive env mie.mind_entry_polymorphic mie.mind_entry_private
+  let mbs = build_inductive env mie.mind_entry_polymorphic mie.mind_entry_private
       mie.mind_entry_universes
       env_ar params kn mie.mind_entry_record mie.mind_entry_finite
-      inds nmr recargs
+      inds nmr recargs fixl
+  in
+  let fixl = typecheck_fixl env kn mbs fixl in
+    mbs, fixl

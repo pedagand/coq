@@ -1134,7 +1134,10 @@ let drop_notations_pattern looked_for =
 	  Dumpglob.add_glob loc g;
 	  let (_,argscs) = find_remaining_scopes [] pats g in
 	  Some (g,[],List.map2 (fun x -> in_pat false {env with tmp_scope = x}) argscs pats)
-    with Not_found -> None
+    with Not_found -> 
+      match qid with
+      | Ident id -> Some (, [], [])
+      | _ -> None
   and in_pat top env = function
     | CPatAlias (loc, p, id) -> RCPatAlias (loc, in_pat top env p, id)
     | CPatRecord (loc, l) ->

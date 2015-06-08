@@ -269,6 +269,8 @@ let build_constant_declaration kn env (def,typ,proj,poly,univs,inline_code,ctx) 
 let translate_constant env kn ce =
   build_constant_declaration kn env (infer_declaration env (Some kn) ce)
 
+let () = Indtypes.translate_constant_ref := translate_constant
+
 let translate_local_assum env t =
   let j = infer env t in
   let t = Typeops.assumption_of_judgment env j in
@@ -286,10 +288,16 @@ let translate_local_def env id centry =
 (* Insertion of inductive types. *)
 
 let translate_mind env kn mie fixl = 
-  let mentry = Indtypes.check_inductive env kn mie 
-                   (List.map (fun (kn, x) -> (Constant.label kn, x)) fixl) in
-  let env' = Environ.add_mind kn mentry [] env in 
-  let decl = List.map (fun (kn,f) -> (kn, translate_constant env' kn f)) fixl in
+  let mentry, fixlentries = 
+    Indtypes.check_inductive env kn mie fixl in
+  let env' = Environ.add_mind kn mentry fixlentries env in 
+  let decl = 
+    List.map_filter
+    (fun (kn,f) -> 
+     match f with
+     | DefinitionEntry _ -> 
+	Some (kn, translate_constant env' kn f)
+     | _ -> None) fixl in
   mentry, decl
 
 let handle_entry_side_effects env ce = { ce with

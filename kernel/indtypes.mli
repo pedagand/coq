@@ -34,7 +34,9 @@ exception InductiveError of inductive_error
 
 (** The following function does checks on inductive declarations. *)
 
-val check_inductive : env -> mutual_inductive -> mutual_inductive_entry -> (Label.t * constant_entry) list -> mutual_inductive_body
+val translate_constant_ref : (env -> constant -> constant_entry -> constant_body) ref
+val check_inductive : env -> mutual_inductive -> mutual_inductive_entry -> (Constant.t * constant_entry) list -> 
+		      mutual_inductive_body * (Names.Constant.t * constant_body) list
 
 (** The following enforces a system compatible with the univalent model *)
 
@@ -46,3 +48,5 @@ val compute_projections : pinductive -> Id.t -> Id.t ->
   int -> Context.rel_context -> int array -> int array -> 
   Context.rel_context -> 
   (constant array * projection_body array)
+
+
